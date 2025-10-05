@@ -18,8 +18,8 @@ pub fn buildNcurses(
     const build_dir = b.fmt(".zig-cache/ncurses-build/{s}", .{target_str});
 
     // Library paths (relative)
-    const lib_output_rel = "lib/libncurses.a"; // Relative to zig-out
-    const lib_build_path = b.fmt("{s}/lib/libncurses.a", .{build_dir});
+    const lib_output_rel = "lib/libtinfo.a"; // Relative to zig-out
+    const lib_build_path = b.fmt("{s}/lib/libtinfo.a", .{build_dir});
 
     // Check if already built (cache)
     const check_lib = b.addSystemCommand(&.{ "test", "-f", lib_build_path });
@@ -32,7 +32,7 @@ pub fn buildNcurses(
     const abs_build_dir = b.fmt("{s}/{s}", .{ cwd, build_dir });
     const abs_ncurses_root = b.fmt("{s}/{s}", .{ cwd, ncurses_root });
 
-    // Determine zig cc target string
+    // Determine zig cc target string and CPPFLAGS
     const zig_target = b.fmt("{s}-{s}", .{
         @tagName(target.result.cpu.arch),
         if (target.result.os.tag == .linux)
@@ -40,6 +40,18 @@ pub fn buildNcurses(
         else
             @tagName(target.result.os.tag),
     });
+
+    // macOS needs custom ospeed type (sys/ttydev.h doesn't exist)
+    const ospeed_opt = if (target.result.os.tag == .macos)
+        "--with-ospeed=unsigned"
+    else
+        "";
+
+    // Cross-compilation requires --host
+    const host_opt = if (target.result.os.tag == .linux)
+        b.fmt("--host={s}", .{zig_target})
+    else
+        "";
 
     // Configure ncurses with zig cc
     const configure_cmd = b.addSystemCommand(&.{
@@ -59,34 +71,29 @@ pub fn buildNcurses(
             \\  --without-progs \
             \\  --without-tests \
             \\  --without-manpages \
+            \\  --without-debug \
             \\  --disable-widec \
+            \\  --disable-database \
             \\  --with-termlib \
             \\  --with-default-terminfo-dir=/usr/share/terminfo \
-            \\  --enable-termcap
+            \\  --enable-termcap \
+            \\  {s} \
+            \\  {s}
         ,
-            .{ build_dir, zig_target, abs_ncurses_root, abs_build_dir },
+            .{ build_dir, zig_target, abs_ncurses_root, abs_build_dir, ospeed_opt, host_opt },
         ),
     });
     configure_cmd.step.dependOn(&mkdir_cmd.step);
     configure_cmd.has_side_effects = true;
 
-    // Build ncurses
+    // Build ncurses libs only
     const make_cmd = b.addSystemCommand(&.{
         "sh",
         "-c",
-        b.fmt("cd {s} && make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)", .{build_dir}),
+        b.fmt("cd {s} && make libs -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)", .{build_dir}),
     });
     make_cmd.step.dependOn(&configure_cmd.step);
     make_cmd.has_side_effects = true;
-
-    // Install ncurses to build directory
-    const install_cmd = b.addSystemCommand(&.{
-        "sh",
-        "-c",
-        b.fmt("cd {s} && make install", .{build_dir}),
-    });
-    install_cmd.step.dependOn(&make_cmd.step);
-    install_cmd.has_side_effects = true;
 
     // Copy library to install prefix lib directory
     const lib_output_path = b.fmt("{s}/{s}", .{ b.install_prefix, lib_output_rel });
@@ -95,7 +102,7 @@ pub fn buildNcurses(
         "-c",
         b.fmt("mkdir -p {s}/lib && cp {s} {s}", .{ b.install_prefix, lib_build_path, lib_output_path }),
     });
-    copy_lib_cmd.step.dependOn(&install_cmd.step);
+    copy_lib_cmd.step.dependOn(&make_cmd.step);
 
     // Create a Compile step that depends on the built library
     const ncurses_module = b.createModule(.{
@@ -106,7 +113,7 @@ pub fn buildNcurses(
     });
 
     const ncurses = b.addLibrary(.{
-        .name = "ncurses",
+        .name = "tinfo",
         .root_module = ncurses_module,
         .linkage = .static,
     });
