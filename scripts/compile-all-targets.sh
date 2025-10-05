@@ -59,4 +59,4 @@ echo "Output directories:"
 ls -d zig-out/*/
 echo
 echo "Binaries:"
-ls -lh zig-out/*/bin/beam.smp
+ls -lh zig-out/*/bin/*

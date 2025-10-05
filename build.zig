@@ -63,12 +63,28 @@ pub fn build(b: *std.Build) void {
     });
 
     // ============================================================================
+    // erl_child_setup - Process spawning helper
+    // ============================================================================
+
+    const child_setup = buildErlChildSetup(b, target, optimize, .{
+        .ethread = ethread,
+        .gen_step = gen_step,
+    });
+
+    // ============================================================================
     // Installation
     // ============================================================================
 
-    // Install to platform-specific directory: zig-out/{target}/bin/beam.smp
+    // Install to platform-specific directory: zig-out/{target}/bin/
     const install_step = b.getInstallStep();
     install_step.dependOn(&b.addInstallArtifact(beam, .{
+        .dest_dir = .{
+            .override = .{
+                .custom = b.fmt("{s}/bin", .{target_str}),
+            },
+        },
+    }).step);
+    install_step.dependOn(&b.addInstallArtifact(child_setup, .{
         .dest_dir = .{
             .override = .{
                 .custom = b.fmt("{s}/bin", .{target_str}),
@@ -101,6 +117,82 @@ const ERTSOptions = struct {
     gen_step: *std.Build.Step,
 };
 
+// ============================================================================
+// Build erl_child_setup helper
+// ============================================================================
+
+const ChildSetupOptions = struct {
+    ethread: *std.Build.Step.Compile,
+    gen_step: *std.Build.Step,
+};
+
+fn buildErlChildSetup(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    options: ChildSetupOptions,
+) *std.Build.Step.Compile {
+    // Create module for erl_child_setup
+    const child_module = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+
+    const child_setup = b.addExecutable(.{
+        .name = "erl_child_setup",
+        .root_module = child_module,
+    });
+
+    child_setup.step.dependOn(options.gen_step);
+
+    // Add include directories
+    const config_dir = getConfigDirName(b, target);
+    child_setup.addIncludePath(b.path(b.fmt("{s}/erts/{s}", .{ otp_root, config_dir })));
+    child_setup.addIncludePath(b.path(b.fmt("{s}/erts/include", .{otp_root})));
+    child_setup.addIncludePath(b.path(b.fmt("{s}/erts/include/{s}", .{ otp_root, config_dir })));
+    child_setup.addIncludePath(b.path(b.fmt("{s}/erts/include/internal", .{otp_root})));
+    child_setup.addIncludePath(b.path(b.fmt("{s}/erts/emulator/beam", .{otp_root})));
+    child_setup.addIncludePath(b.path(b.fmt("{s}/erts/emulator/sys/unix", .{otp_root})));
+    child_setup.addIncludePath(b.path(b.fmt("{s}/erts/emulator/sys/common", .{otp_root})));
+    child_setup.addIncludePath(b.path("build/generated"));
+
+    // Add source files
+    child_setup.addCSourceFile(.{
+        .file = b.path(b.fmt("{s}/erts/emulator/sys/unix/erl_child_setup.c", .{otp_root})),
+        .flags = &.{
+            "-DHAVE_CONFIG_H",
+            "-D_GNU_SOURCE",
+        },
+    });
+    child_setup.addCSourceFile(.{
+        .file = b.path(b.fmt("{s}/erts/emulator/sys/unix/sys_uds.c", .{otp_root})),
+        .flags = &.{
+            "-DHAVE_CONFIG_H",
+            "-D_GNU_SOURCE",
+        },
+    });
+    child_setup.addCSourceFile(.{
+        .file = b.path(b.fmt("{s}/erts/emulator/beam/hash.c", .{otp_root})),
+        .flags = &.{
+            "-DHAVE_CONFIG_H",
+            "-D_GNU_SOURCE",
+        },
+    });
+
+    // Add Linux compatibility functions
+    if (target.result.os.tag == .linux) {
+        child_setup.addCSourceFile(.{
+            .file = b.path("build/linux_compat.c"),
+            .flags = &.{},
+        });
+    }
+
+    // Link ethread library for threading support
+    child_setup.linkLibrary(options.ethread);
+
+    return child_setup;
+}
 
 fn getConfigDirName(b: *std.Build, target: std.Build.ResolvedTarget) []const u8 {
     // Map Zig target to autoconf-style config directory name

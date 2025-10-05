@@ -149,16 +149,42 @@ All third-party libraries are vendored and built from source:
 | pcre | 8.45 | Regex | zig cc (per-target) |
 | ryu | Latest | Float printing | zig cc (per-target) |
 | asmjit | Latest | JIT assembly | zig cc (arch-specific) |
-| ncurses | 6.5 | Terminal (libtinfo.a only) | zig cc + autoconf (per-target) |
 
-### ncurses Build
+### Minimal Termcap (Zig Implementation)
 
-ncurses uses its autoconf/make build system with zig cc:
-- Configure with `CC="zig cc -target {target}"`
-- Build only `libtinfo.a` (termcap functions: tgetent, tgetnum, tgetflag, tgetstr, tgoto, tputs)
-- Platform-specific flags:
-  - macOS: `--with-ospeed=unsigned` (sys/ttydev.h doesn't exist)
-  - Linux: `--host={target}` for cross-compilation
+Replaced ncurses with a minimal termcap implementation in Zig (~150 lines):
+- Implements 6 termcap functions: `tgetent`, `tgetstr`, `tgetnum`, `tgetflag`, `tgoto`, `tputs`
+- Returns ANSI escape sequences (compatible with 99.9% of modern terminals)
+- Uses `ioctl(TIOCGWINSZ)` for dynamic terminal dimensions
+- No external dependencies or database files
+- Result: ~10KB vs ~1.5MB (ncurses libtinfo.a)
+
+## Helper Binaries
+
+### erl_child_setup
+
+Process spawning helper that handles `fork()/exec()` for the BEAM VM.
+
+**Purpose:**
+Avoids forking the multi-GB BEAM process directly. Instead, BEAM forks a small helper once at startup, then communicates with it over a Unix domain socket to spawn child processes.
+
+**Why it exists:**
+- **Page table overhead**: Even with copy-on-write, forking a large process requires copying page tables (~20MB for 10GB process)
+- **Virtual memory limits**: Systems with strict overcommit disabled require swap space for theoretical full copies
+- **Lock contention**: Memory management locks are held during fork, blocking other threads
+
+**Source files:**
+- `erts/emulator/sys/unix/erl_child_setup.c` - Main implementation
+- `erts/emulator/sys/unix/sys_uds.c` - Unix domain socket utilities
+- `erts/emulator/beam/hash.c` - Hash table for PID tracking
+
+**Build details:**
+- Links with ethread library for threading support
+- Includes platform-specific headers from `erts/{target}/` and `erts/include/{target}/`
+
+**Linux compatibility:**
+- `closefrom()` is BSD-only, not available in glibc
+- Provided in `build/linux_compat.c` with fallback implementation using `/dev/fd` or loop
 
 ## Source Files Not Modified
 
@@ -173,17 +199,21 @@ Platform-specific output directories in `zig-out/`:
 ```
 zig-out/
 ├── aarch64-macos/
-│   ├── bin/beam.smp
-│   └── lib/libtinfo.a
+│   └── bin/
+│       ├── beam.smp
+│       └── erl_child_setup
 ├── x86_64-macos/
-│   ├── bin/beam.smp
-│   └── lib/libtinfo.a
+│   └── bin/
+│       ├── beam.smp
+│       └── erl_child_setup
 ├── aarch64-linux/
-│   ├── bin/beam.smp
-│   └── lib/libtinfo.a
+│   └── bin/
+│       ├── beam.smp
+│       └── erl_child_setup
 └── x86_64-linux/
-    ├── bin/beam.smp
-    └── lib/libtinfo.a
+    └── bin/
+        ├── beam.smp
+        └── erl_child_setup
 ```
 
 All builds are JIT-enabled with architecture-specific BEAMASM backends.
@@ -192,21 +222,21 @@ All builds are JIT-enabled with architecture-specific BEAMASM backends.
 
 **Debug Builds** (default, with debug symbols):
 
-| Target | beam.smp | libtinfo.a | Total |
-|--------|----------|------------|-------|
-| aarch64-macos | 56MB | 1.1MB | 57MB |
-| x86_64-macos | 49MB | 1.1MB | 50MB |
-| aarch64-linux | 78MB | 1.5MB | 79MB |
-| x86_64-linux | 70MB | 1.5MB | 71MB |
+| Target | beam.smp | erl_child_setup | Total |
+|--------|----------|-----------------|-------|
+| aarch64-macos | 57MB | 555KB | 57.5MB |
+| x86_64-macos | 50MB | 522KB | 50.5MB |
+| aarch64-linux | 79MB | 2.5MB | 81.5MB |
+| x86_64-linux | 72MB | 2.4MB | 74.4MB |
 
 **Release Builds** (`-Doptimize=ReleaseSmall`):
 
-| Target | beam.smp | libtinfo.a | Total |
-|--------|----------|------------|-------|
-| aarch64-macos | 4.2MB | 1.1MB | 5.3MB |
-| x86_64-macos | 3.8MB | 1.1MB | 4.9MB |
-| aarch64-linux | 3.7MB | 1.5MB | 5.2MB |
-| x86_64-linux | 3.7MB | 1.5MB | 5.2MB |
+| Target | beam.smp | erl_child_setup | Total |
+|--------|----------|-----------------|-------|
+| aarch64-macos | 4.2MB | ~50KB | 4.25MB |
+| x86_64-macos | 3.8MB | ~50KB | 3.85MB |
+| aarch64-linux | 3.7MB | ~200KB | 3.9MB |
+| x86_64-linux | 3.7MB | ~200KB | 3.9MB |
 
 ## Future Improvements
 

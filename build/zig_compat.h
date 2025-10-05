@@ -2,6 +2,15 @@
 #ifndef ZIG_COMPAT_H
 #define ZIG_COMPAT_H
 
+/* This is processed LAST (included at end of all headers) to fix issues */
+
+/* closefrom is BSD-only, not available on Linux */
+#if defined(__linux__) && defined(HAVE_CLOSEFROM)
+#undef HAVE_CLOSEFROM
+/* Provide a dummy implementation that will never be called
+ * because the #ifndef HAVE_CLOSEFROM fallback will be used */
+#endif
+
 /* Zig's musl libc doesn't declare dlvsym even with _GNU_SOURCE */
 #if defined(HAVE_DLVSYM) && defined(__linux__)
 #ifndef _DLFCN_H

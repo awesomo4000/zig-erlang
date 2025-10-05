@@ -14,7 +14,7 @@ zig build
 
 # Output (organized by platform)
 zig-out/aarch64-macos/bin/beam.smp
-zig-out/aarch64-macos/lib/libtinfo.a
+zig-out/aarch64-macos/bin/erl_child_setup
 ```
 
 ## Documentation
@@ -28,7 +28,9 @@ Builds a complete BEAM VM without using autoconf/make:
 - ✅ JIT compiler (BEAMASM) for ARM64 and x86_64
 - ✅ All runtime systems (scheduler, GC, etc.)
 - ✅ NIFs and drivers
-- ✅ Vendored libraries (zlib, zstd, pcre, ryu, ncurses/terminfo)
+- ✅ Process spawning helper (`erl_child_setup`)
+- ✅ Vendored libraries (zlib, zstd, pcre, ryu)
+- ✅ Minimal termcap implementation (Zig, replaces ncurses)
 - ✅ Real YCF coroutine transformations (9,530 lines generated)
 - ✅ Cross-compilation support for 4 targets
 - ⚠️ No preloaded modules (VM needs external setup)
@@ -113,8 +115,10 @@ Modularized for AI context optimization:
 **Working:**
 - ✅ Cross-compilation to 4 targets (macOS ARM64/x86_64, Linux ARM64/x86_64)
 - ✅ Architecture-specific JIT compilation (BEAMASM)
+- ✅ Process spawning helper (`erl_child_setup`) for all targets
 - ✅ All vendor libraries built per-target with zig cc
-- ✅ ncurses terminfo library vendored and cross-compiled
+- ✅ Minimal termcap in Zig (replaces ncurses, ~10KB vs ~1.5MB)
+- ✅ Linux compatibility layer (closefrom implementation)
 - ✅ Zero undefined symbols, all targets link successfully
 - ✅ YCF yielding transformations (real coroutine implementations)
 
