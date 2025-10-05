@@ -17,6 +17,9 @@ pub fn build(b: *std.Build) void {
 
     const gen_step = codegen.generateSources(b, target, enable_jit);
 
+    // Determine config directory for platform-specific headers
+    const config_dir = getConfigDirName(b, target);
+
     // ============================================================================
     // Dependencies
     // ============================================================================
@@ -24,8 +27,8 @@ pub fn build(b: *std.Build) void {
     const zlib = vendor_libs.buildZlib(b, target, optimize);
     const zstd = vendor_libs.buildZstd(b, target, optimize);
     const ryu = vendor_libs.buildRyu(b, target, optimize);
-    const pcre = vendor_libs.buildPcre(b, target, optimize);
-    const ethread = vendor_libs.buildEthread(b, target, optimize);
+    const pcre = vendor_libs.buildPcre(b, target, optimize, config_dir);
+    const ethread = vendor_libs.buildEthread(b, target, optimize, config_dir);
     const asmjit = if (enable_jit) vendor_libs.buildAsmjit(b, target, optimize) else null;
 
     // ============================================================================
@@ -75,6 +78,26 @@ const ERTSOptions = struct {
     gen_step: *std.Build.Step,
 };
 
+
+fn getConfigDirName(b: *std.Build, target: std.Build.ResolvedTarget) []const u8 {
+    // Map Zig target to autoconf-style config directory name
+    // Format: {cpu}-{vendor}-{os}[{version}]
+    const cpu = @tagName(target.result.cpu.arch);
+    const os = target.result.os.tag;
+
+    // For macOS, use the existing configured directory
+    if (os == .macos) {
+        return "aarch64-apple-darwin24.6.0";
+    }
+
+    // For Linux, use standard GNU triplet format
+    if (os == .linux) {
+        return b.fmt("{s}-unknown-linux-gnu", .{cpu});
+    }
+
+    // Fallback for other platforms
+    return b.fmt("{s}-unknown-{s}", .{cpu, @tagName(os)});
+}
 
 fn buildERTS(
     b: *std.Build,
@@ -144,10 +167,10 @@ fn buildERTS(
     beam.addIncludePath(b.path(gen_dir));
 
     // Platform-specific config (from configure)
-    const target_config_dir = "aarch64-apple-darwin24.6.0";
-    beam.addIncludePath(b.path(erts_path ++ "/include/" ++ target_config_dir));
-    beam.addIncludePath(b.path(erts_path ++ "/include/internal/" ++ target_config_dir));
-    beam.addIncludePath(b.path(erts_path ++ "/" ++ target_config_dir));
+    const target_config_dir = getConfigDirName(b, target);
+    beam.addIncludePath(b.path(b.fmt("{s}/include/{s}", .{erts_path, target_config_dir})));
+    beam.addIncludePath(b.path(b.fmt("{s}/include/internal/{s}", .{erts_path, target_config_dir})));
+    beam.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, target_config_dir})));
 
     // Add target directory for erl_version.h
     beam.addIncludePath(b.path(target_str));
@@ -156,24 +179,39 @@ fn buildERTS(
     // Compiler flags
     // ========================================================================
 
-    const base_flags = [_][]const u8{
-        "-DHAVE_CONFIG_H",
-        "-D_THREAD_SAFE",
-        "-D_REENTRANT",
-        "-DPOSIX_THREADS",
-        "-DUSE_THREADS",
-        "-std=c11",
-        "-fno-common",
-        "-fno-strict-aliasing",
-    };
+    // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
+    const base_flags = if (target.result.os.tag == .linux)
+        &[_][]const u8{
+            "-DHAVE_CONFIG_H",
+            "-D_THREAD_SAFE",
+            "-D_REENTRANT",
+            "-DPOSIX_THREADS",
+            "-DUSE_THREADS",
+            "-D_GNU_SOURCE",
+            "-std=c11",
+            "-fno-common",
+            "-fno-strict-aliasing",
+        }
+    else
+        &[_][]const u8{
+            "-DHAVE_CONFIG_H",
+            "-D_THREAD_SAFE",
+            "-D_REENTRANT",
+            "-DPOSIX_THREADS",
+            "-DUSE_THREADS",
+            "-std=c11",
+            "-fno-common",
+            "-fno-strict-aliasing",
+        };
 
     // For JIT builds, add BEAMASM to all C files
-    var common_flags_buf: [base_flags.len + 1][]const u8 = undefined;
+    const max_base_flags = 9; // Max length of base_flags (Linux with _GNU_SOURCE)
+    var common_flags_buf: [max_base_flags + 1][]const u8 = undefined;
     const common_flags = if (options.enable_jit) blk: {
-        @memcpy(common_flags_buf[0..base_flags.len], &base_flags);
+        @memcpy(common_flags_buf[0..base_flags.len], base_flags);
         common_flags_buf[base_flags.len] = "-DBEAMASM";
-        break :blk common_flags_buf[0..];
-    } else &base_flags;
+        break :blk common_flags_buf[0..base_flags.len + 1];
+    } else base_flags;
 
     // ========================================================================
     // Common BEAM sources
@@ -199,18 +237,17 @@ fn buildERTS(
     });
 
     // Add MD5 from openssl directory - needs ERLANG_OPENSSL_INTEGRATION flag
-    const md5_flags = if (options.enable_jit)
+    const md5_base_flags = if (target.result.os.tag == .linux)
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
             "-D_REENTRANT",
             "-DPOSIX_THREADS",
             "-DUSE_THREADS",
+            "-D_GNU_SOURCE",
             "-std=c11",
             "-fno-common",
             "-fno-strict-aliasing",
-            "-DBEAMASM",
-            "-DERLANG_OPENSSL_INTEGRATION",
         }
     else
         &[_][]const u8{
@@ -222,8 +259,21 @@ fn buildERTS(
             "-std=c11",
             "-fno-common",
             "-fno-strict-aliasing",
-            "-DERLANG_OPENSSL_INTEGRATION",
         };
+
+    const max_md5_flags = 11; // Max length including JIT and integration flags
+    var md5_flags_buf: [max_md5_flags][]const u8 = undefined;
+    const md5_flags = blk: {
+        @memcpy(md5_flags_buf[0..md5_base_flags.len], md5_base_flags);
+        if (options.enable_jit) {
+            md5_flags_buf[md5_base_flags.len] = "-DBEAMASM";
+            md5_flags_buf[md5_base_flags.len + 1] = "-DERLANG_OPENSSL_INTEGRATION";
+            break :blk md5_flags_buf[0..md5_base_flags.len + 2];
+        } else {
+            md5_flags_buf[md5_base_flags.len] = "-DERLANG_OPENSSL_INTEGRATION";
+            break :blk md5_flags_buf[0..md5_base_flags.len + 1];
+        }
+    };
     beam.addCSourceFile(.{
         .file = b.path(emulator_path ++ "/openssl/crypto/md5/md5_dgst.c"),
         .flags = md5_flags,
@@ -467,20 +517,33 @@ fn buildERTS(
             emulator_path ++ "/beam/jit/arm/instr_trace.cpp",
         };
 
-        const cpp_flags = [_][]const u8{
-            "-DHAVE_CONFIG_H",
-            "-D_THREAD_SAFE",
-            "-D_REENTRANT",
-            "-DPOSIX_THREADS",
-            "-DUSE_THREADS",
-            "-DBEAMASM",
-            "-std=c++17",
-            "-fno-common",
-        };
+        const cpp_flags = if (target.result.os.tag == .linux)
+            &[_][]const u8{
+                "-DHAVE_CONFIG_H",
+                "-D_THREAD_SAFE",
+                "-D_REENTRANT",
+                "-DPOSIX_THREADS",
+                "-DUSE_THREADS",
+                "-D_GNU_SOURCE",
+                "-DBEAMASM",
+                "-std=c++17",
+                "-fno-common",
+            }
+        else
+            &[_][]const u8{
+                "-DHAVE_CONFIG_H",
+                "-D_THREAD_SAFE",
+                "-D_REENTRANT",
+                "-DPOSIX_THREADS",
+                "-DUSE_THREADS",
+                "-DBEAMASM",
+                "-std=c++17",
+                "-fno-common",
+            };
 
         beam.addCSourceFiles(.{
             .files = &jit_cpp_sources,
-            .flags = &cpp_flags,
+            .flags = cpp_flags,
         });
 
         // ASMJIT library include path
@@ -534,19 +597,27 @@ fn buildERTS(
     beam.linkLibrary(options.ethread);
 
     // Platform-specific system libraries
+    const is_cross_compiling = !target.result.os.tag.isDarwin() or target.result.cpu.arch != b.graph.host.result.cpu.arch;
+
     if (target.result.os.tag == .macos) {
         beam.linkFramework("CoreFoundation");
         beam.linkSystemLibrary("pthread");
         beam.linkSystemLibrary("m");
         beam.linkSystemLibrary("util");
-        beam.linkSystemLibrary("ncurses"); // For termcap functions
+        // ncurses optional when cross-compiling
+        if (!is_cross_compiling) {
+            beam.linkSystemLibrary("ncurses");
+        }
     } else if (target.result.os.tag == .linux) {
         beam.linkSystemLibrary("pthread");
         beam.linkSystemLibrary("m");
         beam.linkSystemLibrary("rt");
         beam.linkSystemLibrary("util");
         beam.linkSystemLibrary("dl");
-        beam.linkSystemLibrary("ncurses"); // For termcap functions
+        // ncurses optional when cross-compiling (will vendor later)
+        if (!is_cross_compiling) {
+            beam.linkSystemLibrary("ncurses");
+        }
     }
 
     return beam;

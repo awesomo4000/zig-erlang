@@ -32,10 +32,37 @@ Builds a complete BEAM VM (56MB executable) without using autoconf/make:
 
 ## Architecture
 
-- **Target:** ARM64 macOS (aarch64-macos-none)
+- **Primary Target:** ARM64 macOS (aarch64-macos-none)
+- **Cross-Compilation:** x86_64 Linux (experimental, 30/33 steps working)
 - **Build Tool:** Zig 0.15.1
 - **Source:** Erlang/OTP 28.1 (unmodified)
 - **Output:** Static executable with JIT support
+
+### Cross-Compilation Support
+
+Cross-compile for Linux:
+```bash
+zig build -Dtarget=x86_64-linux-gnu
+```
+
+**Cross-Compilation Status (Linux x86_64):**
+- ✅ 30/33 build steps succeed
+- ✅ ncurses made optional (skipped when cross-compiling)
+- ✅ `_GNU_SOURCE` flags added for Linux extensions
+- ✅ Platform-specific config.h generated via Docker
+- ⚠️ 6 remaining errors (termcap.h + ARM atomics in x86 JIT code)
+
+**Generating Linux config.h:**
+```bash
+# Use Docker to generate Linux-specific configuration
+docker run --rm -v $(pwd)/otp_src_28.1:/tmp/otp -w /tmp/otp \
+  debian:bookworm bash -c \
+  "apt-get update -qq && \
+   apt-get install -y -qq build-essential autoconf perl libncurses-dev && \
+   ./configure --host=x86_64-unknown-linux-gnu"
+```
+
+**Important:** The OTP source tarball is located at `erlang-source/otp_src_28.1.tar.gz`
 
 ### Build System Structure
 

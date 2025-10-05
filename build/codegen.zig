@@ -183,8 +183,8 @@ pub fn generateSources(
     // YCF (Yielding C Functions) - Generate real yielding function headers
     // ========================================================================
 
-    // Build the YCF tool (always optimized for fast build-time execution)
-    const ycf_tool = vendor_libs.buildYcf(b, target, .ReleaseFast);
+    // Build the YCF tool for the host system (it runs during build, not on target)
+    const ycf_tool = vendor_libs.buildYcf(b, b.graph.host, .ReleaseFast);
 
     // Generate utils.ycf.h from beam/utils.c
     const utils_ycf_out = b.fmt("{s}/utils.ycf.h", .{gen_dir});

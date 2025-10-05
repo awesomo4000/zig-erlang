@@ -151,6 +151,7 @@ pub fn buildPcre(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    config_dir: []const u8,
 ) *std.Build.Step.Compile {
     const pcre_path = "otp_src_28.1/erts/emulator/pcre";
 
@@ -186,7 +187,7 @@ pub fn buildPcre(
     pcre.step.dependOn(&gen_yield_cov.step);
 
     pcre.addIncludePath(b.path(pcre_path));
-    pcre.addIncludePath(b.path("otp_src_28.1/erts/aarch64-apple-darwin24.6.0"));
+    pcre.addIncludePath(b.path(b.fmt("otp_src_28.1/erts/{s}", .{config_dir})));
 
     const pcre_sources = [_][]const u8{
         pcre_path ++ "/pcre2_ucptables.c",
@@ -236,6 +237,7 @@ pub fn buildEthread(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    config_dir: []const u8,
 ) *std.Build.Step.Compile {
     const ethread_module = b.createModule(.{
         .root_source_file = null,
@@ -253,11 +255,11 @@ pub fn buildEthread(
     const lib_src_path = "otp_src_28.1/erts/lib_src";
     const erts_path = "otp_src_28.1/erts";
 
-    ethread.addIncludePath(b.path(erts_path ++ "/aarch64-apple-darwin24.6.0")); // For config.h
+    ethread.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, config_dir}))); // For config.h
     ethread.addIncludePath(b.path(erts_path ++ "/include"));
     ethread.addIncludePath(b.path(erts_path ++ "/include/internal"));
-    ethread.addIncludePath(b.path(erts_path ++ "/include/aarch64-apple-darwin24.6.0"));
-    ethread.addIncludePath(b.path(erts_path ++ "/include/internal/aarch64-apple-darwin24.6.0"));
+    ethread.addIncludePath(b.path(b.fmt("{s}/include/{s}", .{erts_path, config_dir})));
+    ethread.addIncludePath(b.path(b.fmt("{s}/include/internal/{s}", .{erts_path, config_dir})));
 
     const ethread_sources = [_][]const u8{
         // pthread sources
