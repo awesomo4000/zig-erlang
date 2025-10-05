@@ -116,7 +116,7 @@ fn buildERTS(
     });
     const flavor = if (options.enable_jit) "jit" else "emu";
     const build_type = "opt";
-    const gen_dir = b.fmt("{s}/{s}/{s}", .{ target_str, build_type, flavor });
+    const gen_dir = b.fmt("generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
 
     // Create module for C-only code (no root Zig source file)
     const beam_module = b.createModule(.{
@@ -172,8 +172,8 @@ fn buildERTS(
     beam.addIncludePath(b.path(b.fmt("{s}/include/internal/{s}", .{erts_path, target_config_dir})));
     beam.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, target_config_dir})));
 
-    // Add target directory for erl_version.h
-    beam.addIncludePath(b.path(target_str));
+    // Add generated directory for erl_version.h and other generated files
+    beam.addIncludePath(b.path(gen_dir));
 
     // ========================================================================
     // Compiler flags

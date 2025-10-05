@@ -18,8 +18,8 @@ pub fn generateSources(
     const flavor = if (enable_jit) "jit" else "emu";
     const build_type = "opt";
 
-    // Output directory for generated files: target/type/flavor
-    const gen_dir = b.fmt("{s}/{s}/{s}", .{ target_str, build_type, flavor });
+    // Output directory for generated files: generated/target/type/flavor
+    const gen_dir = b.fmt("generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
 
     // Create generation directory
     const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", gen_dir });
@@ -122,7 +122,7 @@ pub fn generateSources(
     gen_step.dependOn(&gen_tables.step);
 
     // Generate erl_version.h
-    const version_out = b.fmt("{s}/erl_version.h", .{target_str});
+    const version_out = b.fmt("{s}/erl_version.h", .{gen_dir});
     const gen_version = b.addSystemCommand(&.{
         "perl",
         emulator_path ++ "/utils/make_version",
