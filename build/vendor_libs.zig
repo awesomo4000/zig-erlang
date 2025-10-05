@@ -196,7 +196,14 @@ pub fn buildPcre(
     pcre.step.dependOn(&gen_yield_cov.step);
 
     pcre.addIncludePath(b.path(pcre_path));
-    pcre.addIncludePath(b.path(b.fmt(otp_root ++ "/erts/{s}", .{config_dir})));
+
+    // For Windows, use pre-generated config.h from build/windows_config/
+    if (target.result.os.tag == .windows) {
+        const cpu = @tagName(target.result.cpu.arch);
+        pcre.addIncludePath(b.path(b.fmt("build/windows_config/{s}", .{cpu})));
+    } else {
+        pcre.addIncludePath(b.path(b.fmt(otp_root ++ "/erts/{s}", .{config_dir})));
+    }
 
     const pcre_sources = [_][]const u8{
         pcre_path ++ "/pcre2_ucptables.c",
@@ -264,17 +271,32 @@ pub fn buildEthread(
     const lib_src_path = otp_root ++ "/erts/lib_src";
     const erts_path = otp_root ++ "/erts";
 
-    ethread.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, config_dir}))); // For config.h
+    // For Windows, use pre-generated config headers from build/windows_config/
+    if (target.result.os.tag == .windows) {
+        const cpu = @tagName(target.result.cpu.arch);
+        ethread.addIncludePath(b.path(b.fmt("build/windows_config/{s}", .{cpu}))); // For config.h and ethread_header_config.h
+    } else {
+        ethread.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, config_dir}))); // For config.h
+        ethread.addIncludePath(b.path(b.fmt("{s}/include/{s}", .{erts_path, config_dir})));
+        ethread.addIncludePath(b.path(b.fmt("{s}/include/internal/{s}", .{erts_path, config_dir})));
+    }
     ethread.addIncludePath(b.path(erts_path ++ "/include"));
     ethread.addIncludePath(b.path(erts_path ++ "/include/internal"));
-    ethread.addIncludePath(b.path(b.fmt("{s}/include/{s}", .{erts_path, config_dir})));
-    ethread.addIncludePath(b.path(b.fmt("{s}/include/internal/{s}", .{erts_path, config_dir})));
 
-    const ethread_sources = [_][]const u8{
-        // pthread sources
-        lib_src_path ++ "/pthread/ethread.c",
-        lib_src_path ++ "/pthread/ethr_event.c",
-        // common sources
+    // Platform-specific threading sources
+    const platform_sources = if (target.result.os.tag == .windows)
+        [_][]const u8{
+            lib_src_path ++ "/win/ethread.c",
+            lib_src_path ++ "/win/ethr_event.c",
+        }
+    else
+        [_][]const u8{
+            lib_src_path ++ "/pthread/ethread.c",
+            lib_src_path ++ "/pthread/ethr_event.c",
+        };
+
+    // Common sources for all platforms
+    const common_sources = [_][]const u8{
         lib_src_path ++ "/common/erl_printf.c",
         lib_src_path ++ "/common/erl_printf_format.c",
         lib_src_path ++ "/common/erl_misc_utils.c",
@@ -284,8 +306,24 @@ pub fn buildEthread(
         lib_src_path ++ "/common/ethr_mutex.c",
     };
 
-    // Compile flags - Linux requires _GNU_SOURCE
-    const ethread_flags = if (target.result.os.tag == .linux)
+    const ethread_sources = platform_sources ++ common_sources;
+
+    // Compile flags - platform-specific
+    const ethread_flags = if (target.result.os.tag == .windows)
+        &[_][]const u8{
+            "-std=c11",
+            "-DHAVE_CONFIG_H",
+            "-D_THREAD_SAFE",
+            "-D_REENTRANT",
+            "-DUSE_THREADS",
+            "-D__WIN32__",
+            "-DWIN32_THREADS",
+            "-DWIN32_LEAN_AND_MEAN",
+            // Include windows.h early to get DWORD and other Windows types
+            "-include",
+            "windows.h",
+        }
+    else if (target.result.os.tag == .linux)
         &[_][]const u8{
             "-std=c11",
             "-DHAVE_CONFIG_H",

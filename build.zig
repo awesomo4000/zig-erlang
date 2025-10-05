@@ -207,6 +207,11 @@ fn getConfigDirName(b: *std.Build, target: std.Build.ResolvedTarget) []const u8 
         return b.fmt("{s}-unknown-linux-gnu", .{cpu});
     }
 
+    // For Windows, use simple format (config files are in build/windows_config/)
+    if (os == .windows) {
+        return b.fmt("{s}-unknown-windows", .{cpu});
+    }
+
     // Fallback for other platforms
     return b.fmt("{s}-unknown-{s}", .{cpu, @tagName(os)});
 }
