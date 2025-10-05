@@ -2,6 +2,10 @@
 set -e
 
 # Compile all supported targets for zig-erlang
+# Usage: ./compile-all-targets.sh [optimize_mode]
+#   optimize_mode: Debug (default), ReleaseFast, ReleaseSafe, ReleaseSmall
+
+OPTIMIZE_MODE="${1:-Debug}"
 
 # Determine host architecture
 HOST_ARCH=$(uname -m)
@@ -32,7 +36,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 cd "$PROJECT_DIR"
 
-echo "Building all targets (host: $HOST_TARGET)..."
+echo "Building all targets (host: $HOST_TARGET, optimize: $OPTIMIZE_MODE)..."
 echo
 
 for target in "${TARGETS[@]}"; do
@@ -40,9 +44,9 @@ for target in "${TARGETS[@]}"; do
 
     # For native target, don't specify -Dtarget (avoids cross-compilation behavior)
     if [ "$target" = "$HOST_TARGET" ]; then
-        zig build
+        zig build -Doptimize="$OPTIMIZE_MODE"
     else
-        zig build -Dtarget="$target"
+        zig build -Dtarget="$target" -Doptimize="$OPTIMIZE_MODE"
     fi
 
     echo "✓ Built $target"

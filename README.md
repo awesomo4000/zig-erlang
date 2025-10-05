@@ -24,7 +24,7 @@ zig-out/aarch64-macos/lib/libtinfo.a
 
 ## What This Does
 
-Builds a complete BEAM VM (56MB executable) without using autoconf/make:
+Builds a complete BEAM VM without using autoconf/make:
 - ✅ JIT compiler (BEAMASM) for ARM64 and x86_64
 - ✅ All runtime systems (scheduler, GC, etc.)
 - ✅ NIFs and drivers
@@ -77,6 +77,18 @@ zig-out/
     ├── bin/beam.smp
     └── lib/libtinfo.a
 ```
+
+**Binary Sizes:**
+
+Debug builds (default):
+- macOS: 49-56MB per platform
+- Linux: 70-78MB per platform
+
+Release builds (`-Doptimize=ReleaseSmall`):
+- macOS: 3.8-4.2MB per platform
+- Linux: 3.7MB per platform
+
+See [BUILD.md](BUILD.md) for detailed size breakdown.
 
 **Key Features:**
 - Architecture-aware JIT backend selection (ARM64/x86_64)

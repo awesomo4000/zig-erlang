@@ -173,20 +173,40 @@ Platform-specific output directories in `zig-out/`:
 ```
 zig-out/
 ├── aarch64-macos/
-│   ├── bin/beam.smp          (56MB ARM64 Mach-O)
-│   └── lib/libtinfo.a        (1.1MB static lib)
+│   ├── bin/beam.smp
+│   └── lib/libtinfo.a
 ├── x86_64-macos/
-│   ├── bin/beam.smp          (49MB x86_64 Mach-O)
-│   └── lib/libtinfo.a        (1.0MB static lib)
+│   ├── bin/beam.smp
+│   └── lib/libtinfo.a
 ├── aarch64-linux/
-│   ├── bin/beam.smp          (78MB ARM64 ELF)
-│   └── lib/libtinfo.a        (1.2MB static lib)
+│   ├── bin/beam.smp
+│   └── lib/libtinfo.a
 └── x86_64-linux/
-    ├── bin/beam.smp          (70MB x86_64 ELF)
-    └── lib/libtinfo.a        (1.1MB static lib)
+    ├── bin/beam.smp
+    └── lib/libtinfo.a
 ```
 
 All builds are JIT-enabled with architecture-specific BEAMASM backends.
+
+### Binary Sizes
+
+**Debug Builds** (default, with debug symbols):
+
+| Target | beam.smp | libtinfo.a | Total |
+|--------|----------|------------|-------|
+| aarch64-macos | 56MB | 1.1MB | 57MB |
+| x86_64-macos | 49MB | 1.1MB | 50MB |
+| aarch64-linux | 78MB | 1.5MB | 79MB |
+| x86_64-linux | 70MB | 1.5MB | 71MB |
+
+**Release Builds** (`-Doptimize=ReleaseSmall`):
+
+| Target | beam.smp | libtinfo.a | Total |
+|--------|----------|------------|-------|
+| aarch64-macos | 4.2MB | 1.1MB | 5.3MB |
+| x86_64-macos | 3.8MB | 1.1MB | 4.9MB |
+| aarch64-linux | 3.7MB | 1.5MB | 5.2MB |
+| x86_64-linux | 3.7MB | 1.5MB | 5.2MB |
 
 ## Future Improvements
 
