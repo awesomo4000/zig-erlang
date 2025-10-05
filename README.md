@@ -5,8 +5,9 @@ Building Erlang/OTP 28.1 BEAM VM with JIT using the Zig build system.
 ## Quick Start
 
 ```bash
-# Extract Erlang source (if not already done)
-tar -xzf erlang-source/otp_src_28.1.tar.gz
+# Extract sources (if not already done)
+tar -xzf sources/otp_src_28.1.tar.gz -C sources/
+tar -xzf sources/ncurses-6.5.tar.gz -C sources/
 
 # Build
 zig build
@@ -55,14 +56,14 @@ zig build -Dtarget=x86_64-linux-gnu
 **Generating Linux config.h:**
 ```bash
 # Use Docker to generate Linux-specific configuration (without termcap for cross-compile)
-docker run --rm -v $(pwd)/otp_src_28.1:/tmp/otp -w /tmp/otp \
+docker run --rm -v $(pwd)/sources/otp-28.1:/tmp/otp -w /tmp/otp \
   debian:bookworm bash -c \
   "apt-get update -qq && \
    apt-get install -y -qq build-essential autoconf perl && \
    ./configure --host=x86_64-unknown-linux-gnu --without-termcap"
 ```
 
-**Important:** The OTP source tarball is located at `erlang-source/otp_src_28.1.tar.gz`
+**Important:** Source tarballs are located in `sources/` directory.
 
 ### Build System Structure
 
