@@ -1,0 +1,58 @@
+#!/bin/bash
+set -e
+
+# Compile all supported targets for zig-erlang
+
+# Determine host architecture
+HOST_ARCH=$(uname -m)
+HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+# Map host arch to target format
+case "$HOST_ARCH" in
+    arm64) HOST_ARCH="aarch64" ;;
+    x86_64) HOST_ARCH="x86_64" ;;
+esac
+
+case "$HOST_OS" in
+    darwin) HOST_OS="macos" ;;
+    linux) HOST_OS="linux-gnu" ;;
+esac
+
+HOST_TARGET="${HOST_ARCH}-${HOST_OS}"
+
+TARGETS=(
+    "aarch64-macos"
+    "x86_64-macos"
+    "aarch64-linux-gnu"
+    "x86_64-linux-gnu"
+)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+cd "$PROJECT_DIR"
+
+echo "Building all targets (host: $HOST_TARGET)..."
+echo
+
+for target in "${TARGETS[@]}"; do
+    echo "Building $target..."
+
+    # For native target, don't specify -Dtarget (avoids cross-compilation behavior)
+    if [ "$target" = "$HOST_TARGET" ]; then
+        zig build
+    else
+        zig build -Dtarget="$target"
+    fi
+
+    # Copy binary with platform suffix
+    cp zig-out/bin/beam.smp "zig-out/beam.smp-$target"
+
+    echo "✓ Built beam.smp-$target"
+    echo
+done
+
+echo "All targets built successfully!"
+echo
+echo "Binaries created:"
+ls -lh zig-out/beam.smp-*

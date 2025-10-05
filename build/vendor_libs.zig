@@ -1,4 +1,9 @@
 const std = @import("std");
+const ncurses_lib = @import("ncurses_lib.zig");
+
+// Source directory paths
+const otp_root = "sources/otp-28.1";
+const ncurses_root = "sources/ncurses-6.5";
 
 // ============================================================================
 // Build vendored zlib
@@ -22,7 +27,7 @@ pub fn buildZlib(
         .linkage = .static,
     });
 
-    const zlib_path = "otp_src_28.1/erts/emulator/zlib";
+    const zlib_path = otp_root ++ "/erts/emulator/zlib";
 
     zlib.addIncludePath(b.path(zlib_path));
     zlib.addCSourceFiles(.{
@@ -66,7 +71,7 @@ pub fn buildZstd(
         .linkage = .static,
     });
 
-    const zstd_path = "otp_src_28.1/erts/emulator/zstd";
+    const zstd_path = otp_root ++ "/erts/emulator/zstd";
 
     zstd.addIncludePath(b.path(zstd_path));
     zstd.addIncludePath(b.path(zstd_path ++ "/common"));
@@ -137,7 +142,7 @@ pub fn buildRyu(
         .linkage = .static,
     });
 
-    const ryu_path = "otp_src_28.1/erts/emulator/ryu";
+    const ryu_path = otp_root ++ "/erts/emulator/ryu";
 
     ryu.addIncludePath(b.path(ryu_path));
     ryu.addCSourceFile(.{
@@ -158,7 +163,7 @@ pub fn buildPcre(
     optimize: std.builtin.OptimizeMode,
     config_dir: []const u8,
 ) *std.Build.Step.Compile {
-    const pcre_path = "otp_src_28.1/erts/emulator/pcre";
+    const pcre_path = otp_root ++ "/erts/emulator/pcre";
 
     // Generate pcre2_match_loop_break_cases.gen.h
     const gen_break_cases = b.addSystemCommand(&.{
@@ -192,7 +197,7 @@ pub fn buildPcre(
     pcre.step.dependOn(&gen_yield_cov.step);
 
     pcre.addIncludePath(b.path(pcre_path));
-    pcre.addIncludePath(b.path(b.fmt("otp_src_28.1/erts/{s}", .{config_dir})));
+    pcre.addIncludePath(b.path(b.fmt(otp_root ++ "/erts/{s}", .{config_dir})));
 
     const pcre_sources = [_][]const u8{
         pcre_path ++ "/pcre2_ucptables.c",
@@ -257,8 +262,8 @@ pub fn buildEthread(
         .linkage = .static,
     });
 
-    const lib_src_path = "otp_src_28.1/erts/lib_src";
-    const erts_path = "otp_src_28.1/erts";
+    const lib_src_path = otp_root ++ "/erts/lib_src";
+    const erts_path = otp_root ++ "/erts";
 
     ethread.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, config_dir}))); // For config.h
     ethread.addIncludePath(b.path(erts_path ++ "/include"));
@@ -332,7 +337,7 @@ pub fn buildAsmjit(
         .linkage = .static,
     });
 
-    const asmjit_path = "otp_src_28.1/erts/emulator/asmjit";
+    const asmjit_path = otp_root ++ "/erts/emulator/asmjit";
 
     // Include paths for asmjit headers
     asmjit.addIncludePath(b.path(asmjit_path));
@@ -459,7 +464,7 @@ pub fn buildYcf(
         .root_module = ycf_module,
     });
 
-    const ycf_path = "otp_src_28.1/erts/lib_src/yielding_c_fun";
+    const ycf_path = otp_root ++ "/erts/lib_src/yielding_c_fun";
 
     ycf.addIncludePath(b.path(ycf_path));
 
@@ -485,4 +490,21 @@ pub fn buildYcf(
     });
 
     return ycf;
+}
+
+
+// ============================================================================
+// Build vendored ncurses (tinfo/termcap functionality)
+// ============================================================================
+
+// ============================================================================
+// Build vendored ncurses using its native build system with zig cc
+// ============================================================================
+
+pub fn buildNcurses(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Step.Compile {
+    return ncurses_lib.buildNcurses(b, target, optimize);
 }

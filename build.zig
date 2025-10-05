@@ -2,6 +2,10 @@ const std = @import("std");
 const codegen = @import("build/codegen.zig");
 const vendor_libs = @import("build/vendor_libs.zig");
 
+// Source directory paths
+const otp_root = "sources/otp-28.1";
+const ncurses_root = "sources/ncurses-6.5";
+
 pub fn build(b: *std.Build) void {
     // Target and optimization options
     const target = b.standardTargetOptions(.{});
@@ -29,6 +33,10 @@ pub fn build(b: *std.Build) void {
     const ryu = vendor_libs.buildRyu(b, target, optimize);
     const pcre = vendor_libs.buildPcre(b, target, optimize, config_dir);
     const ethread = vendor_libs.buildEthread(b, target, optimize, config_dir);
+
+    // Build vendored ncurses for all targets using zig cc
+    const ncurses = vendor_libs.buildNcurses(b, target, optimize);
+
     const asmjit = if (enable_jit) vendor_libs.buildAsmjit(b, target, optimize) else null;
 
     // ============================================================================
@@ -41,6 +49,7 @@ pub fn build(b: *std.Build) void {
         .ryu = ryu,
         .pcre = pcre,
         .ethread = ethread,
+        .ncurses = ncurses,
         .asmjit = asmjit,
         .static_link = static_link,
         .enable_jit = enable_jit,
@@ -72,6 +81,7 @@ const ERTSOptions = struct {
     ryu: *std.Build.Step.Compile,
     pcre: *std.Build.Step.Compile,
     ethread: *std.Build.Step.Compile,
+    ncurses: ?*std.Build.Step.Compile,
     asmjit: ?*std.Build.Step.Compile,
     static_link: bool,
     enable_jit: bool,
@@ -85,9 +95,9 @@ fn getConfigDirName(b: *std.Build, target: std.Build.ResolvedTarget) []const u8 
     const cpu = @tagName(target.result.cpu.arch);
     const os = target.result.os.tag;
 
-    // For macOS, use the existing configured directory
+    // For macOS, use apple-darwin format with OS version
     if (os == .macos) {
-        return "aarch64-apple-darwin24.6.0";
+        return b.fmt("{s}-apple-darwin24.6.0", .{cpu});
     }
 
     // For Linux, use standard GNU triplet format
@@ -105,7 +115,7 @@ fn buildERTS(
     optimize: std.builtin.OptimizeMode,
     options: ERTSOptions,
 ) *std.Build.Step.Compile {
-    const erts_path = "otp_src_28.1/erts";
+    const erts_path = otp_root ++ "/erts";
     const emulator_path = erts_path ++ "/emulator";
 
     // Determine target architecture string and generated file directory
@@ -124,6 +134,9 @@ fn buildERTS(
         .x86_64, .x86 => "x86",
         else => "arm", // Default to ARM for unsupported architectures
     };
+
+    // Determine if we're cross-compiling
+    const is_cross_compiling = !target.result.os.tag.isDarwin() or target.result.cpu.arch != b.graph.host.result.cpu.arch;
 
     // Create module for C-only code (no root Zig source file)
     const beam_module = b.createModule(.{
@@ -182,14 +195,18 @@ fn buildERTS(
     // Add generated directory for erl_version.h and other generated files
     beam.addIncludePath(b.path(gen_dir));
 
+    // Add vendored macOS SDK headers when cross-compiling to macOS
+    if (is_cross_compiling and target.result.os.tag == .macos) {
+        beam.addIncludePath(b.path("build/macos_sdk_headers"));
+    }
+
     // ========================================================================
     // Compiler flags
     // ========================================================================
 
     // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
     // When cross-compiling, disable termcap/ncurses since headers aren't available
-    const is_cross_compiling = !target.result.os.tag.isDarwin() or target.result.cpu.arch != b.graph.host.result.cpu.arch;
-
+    // Include zig_compat.h to provide missing function declarations in musl libc
     const base_flags = if (target.result.os.tag == .linux)
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
@@ -198,6 +215,7 @@ fn buildERTS(
             "-DPOSIX_THREADS",
             "-DUSE_THREADS",
             "-D_GNU_SOURCE",
+            "-include", "build/zig_compat.h",
             "-std=c11",
             "-fno-common",
             "-fno-strict-aliasing",
@@ -215,7 +233,7 @@ fn buildERTS(
         };
 
     // For JIT builds, add BEAMASM to all C files
-    const max_base_flags = 9; // Max length of base_flags (Linux with _GNU_SOURCE)
+    const max_base_flags = 11; // Max length of base_flags (Linux with _GNU_SOURCE and zig_compat.h)
     var common_flags_buf: [max_base_flags + 1][]const u8 = undefined;
     const common_flags = if (options.enable_jit) blk: {
         @memcpy(common_flags_buf[0..base_flags.len], base_flags);
@@ -612,26 +630,33 @@ fn buildERTS(
     beam.linkLibrary(options.pcre);
     beam.linkLibrary(options.ethread);
 
+    // Link vendored ncurses (provides termcap functions)
+    if (options.ncurses) |ncurses_lib| {
+        beam.linkLibrary(ncurses_lib);
+    }
+
     // Platform-specific system libraries
     if (target.result.os.tag == .macos) {
-        beam.linkFramework("CoreFoundation");
+        // On macOS host, we can link system libraries even when cross-compiling to different arch
+        const is_macos_host = b.graph.host.result.os.tag.isDarwin();
+        if (is_macos_host) {
+            // Add SDK library and framework paths for system libraries
+            const sdk_path_result = b.run(&.{ "xcrun", "--show-sdk-path" });
+            const sdk_path = std.mem.trim(u8, sdk_path_result, " \n\r\t");
+            const sdk_lib_path = b.fmt("{s}/usr/lib", .{sdk_path});
+            const sdk_framework_path = b.fmt("{s}/System/Library/Frameworks", .{sdk_path});
+            beam.addLibraryPath(.{ .cwd_relative = sdk_lib_path });
+            beam.addFrameworkPath(.{ .cwd_relative = sdk_framework_path });
+            beam.linkFramework("CoreFoundation");
+        }
         beam.linkSystemLibrary("pthread");
         beam.linkSystemLibrary("m");
-        beam.linkSystemLibrary("util");
-        // ncurses optional when cross-compiling
-        if (!is_cross_compiling) {
-            beam.linkSystemLibrary("ncurses");
-        }
     } else if (target.result.os.tag == .linux) {
         beam.linkSystemLibrary("pthread");
         beam.linkSystemLibrary("m");
         beam.linkSystemLibrary("rt");
         beam.linkSystemLibrary("util");
         beam.linkSystemLibrary("dl");
-        // ncurses optional when cross-compiling (will vendor later)
-        if (!is_cross_compiling) {
-            beam.linkSystemLibrary("ncurses");
-        }
     }
 
     return beam;

@@ -1,6 +1,9 @@
 const std = @import("std");
 const vendor_libs = @import("vendor_libs.zig");
 
+// Source directory paths
+const otp_root = "sources/otp-28.1";
+
 pub fn generateSources(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
@@ -32,7 +35,7 @@ pub fn generateSources(
     const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", gen_dir });
     gen_step.dependOn(&mkdir_cmd.step);
 
-    const emulator_path = "otp_src_28.1/erts/emulator";
+    const emulator_path = otp_root ++ "/erts/emulator";
 
     // Generate erl_alloc_types.h
     const alloc_types_out = b.fmt("{s}/erl_alloc_types.h", .{gen_dir});
@@ -84,7 +87,6 @@ pub fn generateSources(
     // Generate opcodes
     // This generates: beam_opcodes.c/h, beam_cold.h, beam_warm.h, beam_hot.h
     const jit_arg = if (enable_jit) "yes" else "no";
-    const otp_root = "otp_src_28.1";
     const gen_opcodes = b.addSystemCommand(&.{
         "perl",
         emulator_path ++ "/utils/beam_makeops",
