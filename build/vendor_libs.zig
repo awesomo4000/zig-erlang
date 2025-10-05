@@ -273,16 +273,30 @@ pub fn buildEthread(
         lib_src_path ++ "/common/ethr_mutex.c",
     };
 
-    ethread.addCSourceFiles(.{
-        .files = &ethread_sources,
-        .flags = &.{
+    // Compile flags - Linux requires _GNU_SOURCE
+    const ethread_flags = if (target.result.os.tag == .linux)
+        &[_][]const u8{
             "-std=c11",
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
             "-D_REENTRANT",
             "-DPOSIX_THREADS",
             "-DUSE_THREADS",
-        },
+            "-D_GNU_SOURCE",
+        }
+    else
+        &[_][]const u8{
+            "-std=c11",
+            "-DHAVE_CONFIG_H",
+            "-D_THREAD_SAFE",
+            "-D_REENTRANT",
+            "-DPOSIX_THREADS",
+            "-DUSE_THREADS",
+        };
+
+    ethread.addCSourceFiles(.{
+        .files = &ethread_sources,
+        .flags = ethread_flags,
     });
 
     return ethread;
