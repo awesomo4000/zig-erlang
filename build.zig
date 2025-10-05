@@ -40,8 +40,8 @@ pub fn build(b: *std.Build) void {
     const pcre = vendor_libs.buildPcre(b, target, optimize, config_dir);
     const ethread = vendor_libs.buildEthread(b, target, optimize, config_dir);
 
-    // Build vendored ncurses for all targets using zig cc
-    const ncurses = vendor_libs.buildNcurses(b, target, optimize, target_str);
+    // Build minimal termcap library in Zig
+    const termcap_lib = vendor_libs.buildTermcap(b, target, optimize);
 
     const asmjit = if (enable_jit) vendor_libs.buildAsmjit(b, target, optimize) else null;
 
@@ -55,7 +55,7 @@ pub fn build(b: *std.Build) void {
         .ryu = ryu,
         .pcre = pcre,
         .ethread = ethread,
-        .ncurses = ncurses,
+        .termcap = termcap_lib,
         .asmjit = asmjit,
         .static_link = static_link,
         .enable_jit = enable_jit,
@@ -94,7 +94,7 @@ const ERTSOptions = struct {
     ryu: *std.Build.Step.Compile,
     pcre: *std.Build.Step.Compile,
     ethread: *std.Build.Step.Compile,
-    ncurses: ?*std.Build.Step.Compile,
+    termcap: *std.Build.Step.Compile,
     asmjit: ?*std.Build.Step.Compile,
     static_link: bool,
     enable_jit: bool,
@@ -643,10 +643,8 @@ fn buildERTS(
     beam.linkLibrary(options.pcre);
     beam.linkLibrary(options.ethread);
 
-    // Link vendored ncurses (provides termcap functions)
-    if (options.ncurses) |ncurses_lib| {
-        beam.linkLibrary(ncurses_lib);
-    }
+    // Link minimal termcap library (provides termcap functions)
+    beam.addObject(options.termcap);
 
     // Platform-specific system libraries
     if (target.result.os.tag == .macos) {

@@ -1,9 +1,8 @@
 const std = @import("std");
-const ncurses_lib = @import("ncurses_lib.zig");
+const termcap = @import("termcap.zig");
 
 // Source directory paths
 const otp_root = "sources/otp-28.1";
-const ncurses_root = "sources/ncurses-6.5";
 
 // ============================================================================
 // Build vendored zlib
@@ -498,14 +497,13 @@ pub fn buildYcf(
 // ============================================================================
 
 // ============================================================================
-// Build vendored ncurses using its native build system with zig cc
+// Build minimal termcap library in Zig
 // ============================================================================
 
-pub fn buildNcurses(
+pub fn buildTermcap(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
-    target_str: []const u8,
 ) *std.Build.Step.Compile {
-    return ncurses_lib.buildNcurses(b, target, optimize, target_str);
+    return termcap.buildTermcap(b, target, optimize);
 }
