@@ -1,10 +1,10 @@
 # Build Process and Generated Files
 
-This document explains how we build Erlang/OTP using Zig instead of the standard autoconf/make build system, and specifically how we handle code generation.
+This document explains how we build Erlang/OTP using Zig instead of the standard autoconf/make build system, and specifically how we handle code generation and cross-compilation.
 
 ## Overview
 
-The standard Erlang build process generates many files during compilation. We replicate some of these steps and stub others for simplicity.
+The standard Erlang build process generates many files during compilation. We replicate these steps using Erlang's existing tools and support cross-compilation to multiple targets.
 
 ## Generated Files We Create (Via Scripts)
 
@@ -19,23 +19,9 @@ These files are generated using Erlang's existing Perl scripts:
 | `erl_dirty_bif_wrap.c` | `utils/make_tables` | Dirty scheduler BIF wrappers |
 | `driver_tab.c` | `utils/make_driver_tab` | Static driver and NIF registration table |
 
-These are generated in `aarch64-macos-none/opt/jit/` by `build.zig` during the build process.
+These are generated in `generated/{target}/{opt_mode}/jit/` by `build.zig` during the build process.
 
-## Files We Stub
-
-### YCF (Yielding C Functions) Files
-
-**Normal Erlang Build:**
-1. Compiles the YCF tool (`erts/lib_src/yielding_c_fun/`) - a C source code transformer
-2. Runs it on C files to generate yielding versions of functions
-3. Produces `.ycf.h` headers with yielding implementations
-
-Example from Makefile.in:
-```makefile
-$(UTILS_YCF_OUTPUT): beam/utils.c
-    yielding_c_fun -yield -f erts_qsort_helper \
-        -output_file_name utils.ycf.h utils.c
-```
+## YCF (Yielding C Functions) Transformation
 
 **What YCF Does:**
 Transforms blocking C functions into cooperative multitasking functions that can:
@@ -48,22 +34,22 @@ Example: `erts_qsort_helper()` becomes:
 - `erts_qsort_ycf_gen_continue()` - resume function
 - `erts_qsort_ycf_gen_destroy()` - cleanup function
 
-**What We Did Instead:**
-Created stub files that skip YCF transformation:
+**Our Implementation:**
+We compile and run the real YCF tool from `erts/lib_src/yielding_c_fun/`:
+1. Compile YCF compiler as a native host tool
+2. Run YCF on source files to generate yielding implementations
+3. Produces real `.ycf.h` headers with ~9,530 lines of generated code
 
-| Stub File | Purpose |
-|-----------|---------|
-| `utils.ycf.h` | Empty header with YCF macros |
-| `erl_map.ycf.h` | Empty header with YCF macros |
-| `erl_db_insert_list.ycf.h` | Empty header with YCF macros |
-| `utils_ycf_stubs.c` | Non-yielding implementations that just call standard library functions |
+| Generated File | Source | Functions Transformed |
+|---------------|--------|----------------------|
+| `utils.ycf.h` | `beam/utils.c` | `erts_qsort_helper` |
+| `erl_map.ycf.h` | `beam/erl_map.c` | Map operations |
+| `erl_db_insert_list.ycf.h` | `beam/erl_db_insert_list.c` | ETS insert operations |
 
-Our stubs use blocking calls (e.g., `qsort()` directly) instead of yielding versions.
-
-**Trade-off:**
-- ✅ Simpler build (no YCF tool compilation needed)
-- ✅ Works fine for small/medium workloads
-- ❌ Long operations can block scheduler threads (worse latency under heavy load)
+**Result:**
+- ✅ Full cooperative multitasking support
+- ✅ Proper scheduler yielding for long operations
+- ✅ Production-quality latency characteristics
 
 ### Preloaded Modules (preload.c)
 
@@ -123,28 +109,85 @@ beam.addCSourceFiles(.{
 
 This generates both high-performance (kernel) and portable (fallback) I/O polling implementations.
 
+## Cross-Compilation Support
+
+The build system supports cross-compilation to multiple targets:
+
+### Supported Targets
+
+| Target | Architecture | OS | JIT Backend | Status |
+|--------|-------------|-----|-------------|--------|
+| `aarch64-macos` | ARM64 | macOS | BEAMASM ARM64 | ✅ Working |
+| `x86_64-macos` | x86_64 | macOS | BEAMASM x86_64 | ✅ Working |
+| `aarch64-linux-gnu` | ARM64 | Linux (glibc) | BEAMASM ARM64 | ✅ Working |
+| `x86_64-linux-gnu` | x86_64 | Linux (glibc) | BEAMASM x86_64 | ✅ Working |
+
+### Per-Target Builds
+
+Each target gets its own:
+- **Generated files** in `generated/{target}/{opt_mode}/jit/`
+- **JIT backend** (ARM64 or x86_64 BEAMASM)
+- **Vendor libraries** (zlib, zstd, pcre, ryu, asmjit) built with `zig cc -target {target}`
+- **ncurses** (libtinfo.a) cross-compiled with platform-specific flags
+
+### Build Script
+
+Use `scripts/compile-all-targets.sh` to build all 4 targets:
+```bash
+./scripts/compile-all-targets.sh
+# Creates: zig-out/beam.smp-{target} for each target
+```
+
+## Vendor Libraries
+
+All third-party libraries are vendored and built from source:
+
+| Library | Version | Purpose | Built With |
+|---------|---------|---------|------------|
+| zlib | 1.3.1 | Compression | zig cc (per-target) |
+| zstd | 1.5.6 | Compression | zig cc (per-target) |
+| pcre | 8.45 | Regex | zig cc (per-target) |
+| ryu | Latest | Float printing | zig cc (per-target) |
+| asmjit | Latest | JIT assembly | zig cc (arch-specific) |
+| ncurses | 6.5 | Terminal (libtinfo.a only) | zig cc + autoconf (per-target) |
+
+### ncurses Build
+
+ncurses uses its autoconf/make build system with zig cc:
+- Configure with `CC="zig cc -target {target}"`
+- Build only `libtinfo.a` (termcap functions: tgetent, tgetnum, tgetflag, tgetstr, tgoto, tputs)
+- Platform-specific flags:
+  - macOS: `--with-ospeed=unsigned` (sys/ttydev.h doesn't exist)
+  - Linux: `--host={target}` for cross-compilation
+
 ## Source Files Not Modified
 
-**Important:** We do NOT modify any Erlang source code. All files in `otp_src_28.1/` are pristine.
+**Important:** We do NOT modify any Erlang source code. All files in `sources/otp-28.1/` are pristine.
 
-Our stubs and generated files live in `aarch64-macos-none/opt/jit/` - completely separate from the original source tree.
+Our generated files live in `generated/{target}/{opt_mode}/jit/` - completely separate from the original source tree.
 
 ## Build Output
 
-- **Executable:** `zig-out/bin/beam.smp` (56MB ARM64 Mach-O)
-- **Build Mode:** JIT-enabled (BEAMASM), optimized
-- **Platform:** macOS ARM64 (aarch64-macos-none)
+Per-target executables in `zig-out/`:
+- `beam.smp` (default target)
+- `beam.smp-aarch64-macos` (56MB ARM64 Mach-O)
+- `beam.smp-x86_64-macos` (49MB x86_64 Mach-O)
+- `beam.smp-aarch64-linux-gnu` (78MB ARM64 ELF)
+- `beam.smp-x86_64-linux-gnu` (70MB x86_64 ELF)
+
+All builds are JIT-enabled with architecture-specific BEAMASM backends.
 
 ## Future Improvements
 
 To make the VM fully functional, we would need to:
-1. Run YCF tool to generate proper yielding versions
+1. ✅ ~~Run YCF tool to generate proper yielding versions~~ (DONE)
 2. Compile and embed preloaded Erlang modules
 3. Set up proper directory structure and environment variables (BINDIR, ROOTDIR, etc.)
 
 ## References
 
-- YCF Tool: `otp_src_28.1/erts/lib_src/yielding_c_fun/`
-- Generation Scripts: `otp_src_28.1/erts/emulator/utils/`
-- Original Makefile: `otp_src_28.1/erts/emulator/Makefile.in`
-- Generated Files: `aarch64-macos-none/opt/jit/`
+- YCF Tool: `sources/otp-28.1/erts/lib_src/yielding_c_fun/`
+- Generation Scripts: `sources/otp-28.1/erts/emulator/utils/`
+- Original Makefile: `sources/otp-28.1/erts/emulator/Makefile.in`
+- Generated Files: `generated/{target}/{opt_mode}/jit/`
+- Build System: `build.zig`, `build/codegen.zig`, `build/vendor_libs.zig`, `build/ncurses_lib.zig`
