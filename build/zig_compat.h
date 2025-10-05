@@ -4,31 +4,34 @@
 
 /* This is processed LAST (included at end of all headers) to fix issues */
 
-/* closefrom is BSD-only, not available on Linux */
-#if defined(__linux__) && defined(HAVE_CLOSEFROM)
-#undef HAVE_CLOSEFROM
-/* Provide a dummy implementation that will never be called
- * because the #ifndef HAVE_CLOSEFROM fallback will be used */
+/* closefrom is BSD-only, not in glibc/musl - provide our own */
+#if defined(__linux__) && !defined(__GLIBC__)
+#include <unistd.h>
+/* Declare closefrom - implemented in linux_compat.c */
+extern void closefrom(int lowfd);
 #endif
 
-/* Zig's musl libc doesn't declare dlvsym even with _GNU_SOURCE */
-#if defined(HAVE_DLVSYM) && defined(__linux__)
-#ifndef _DLFCN_H
-#define _DLFCN_H 1
-#endif
+/* musl doesn't support symbol versioning - dlvsym is glibc-only */
+#if !defined(__GLIBC__)
 #include <dlfcn.h>
-/* Declare dlvsym if not already declared (musl libc issue) */
+/* Fall back to regular dlsym for musl (no symbol versioning) */
 #ifndef dlvsym
-extern void *dlvsym(void *handle, const char *symbol, const char *version);
+#define dlvsym(handle, symbol, version) dlsym(handle, symbol)
 #endif
 #endif
 
-/* Zig's musl libc doesn't declare mallopt even with _GNU_SOURCE */
-#if defined(HAVE_MALLOPT) && defined(__linux__)
-#include <malloc.h>
-/* Declare mallopt if not already declared (musl libc issue) */
+/* musl doesn't support malloc tuning - mallopt is glibc-only */
+#if !defined(__GLIBC__)
+/* Provide no-op stub for musl (returns 0 = failure, but harmless) */
+#ifndef M_MMAP_MAX
+#define M_MMAP_MAX 0  /* Dummy definition for musl */
+#endif
 #ifndef mallopt
-extern int mallopt(int param, int value);
+static inline int mallopt(int param, int value) {
+    (void)param;
+    (void)value;
+    return 0;
+}
 #endif
 #endif
 

@@ -158,30 +158,28 @@ fn buildErlChildSetup(
     child_setup.addIncludePath(b.path("build/generated"));
 
     // Add source files
+    const child_flags = &.{
+        "-DHAVE_CONFIG_H",
+        "-D_GNU_SOURCE",
+        "-include",
+        "build/zig_compat.h",
+    };
+
     child_setup.addCSourceFile(.{
         .file = b.path(b.fmt("{s}/erts/emulator/sys/unix/erl_child_setup.c", .{otp_root})),
-        .flags = &.{
-            "-DHAVE_CONFIG_H",
-            "-D_GNU_SOURCE",
-        },
+        .flags = child_flags,
     });
     child_setup.addCSourceFile(.{
         .file = b.path(b.fmt("{s}/erts/emulator/sys/unix/sys_uds.c", .{otp_root})),
-        .flags = &.{
-            "-DHAVE_CONFIG_H",
-            "-D_GNU_SOURCE",
-        },
+        .flags = child_flags,
     });
     child_setup.addCSourceFile(.{
         .file = b.path(b.fmt("{s}/erts/emulator/beam/hash.c", .{otp_root})),
-        .flags = &.{
-            "-DHAVE_CONFIG_H",
-            "-D_GNU_SOURCE",
-        },
+        .flags = child_flags,
     });
 
-    // Add Linux compatibility functions
-    if (target.result.os.tag == .linux) {
+    // Add Linux/musl compatibility functions
+    if (target.result.os.tag == .linux or target.result.abi == .musl) {
         child_setup.addCSourceFile(.{
             .file = b.path("build/linux_compat.c"),
             .flags = &.{},
