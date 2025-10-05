@@ -180,6 +180,9 @@ fn buildERTS(
     // ========================================================================
 
     // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
+    // When cross-compiling, disable termcap/ncurses since headers aren't available
+    const is_cross_compiling = !target.result.os.tag.isDarwin() or target.result.cpu.arch != b.graph.host.result.cpu.arch;
+
     const base_flags = if (target.result.os.tag == .linux)
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
@@ -597,8 +600,6 @@ fn buildERTS(
     beam.linkLibrary(options.ethread);
 
     // Platform-specific system libraries
-    const is_cross_compiling = !target.result.os.tag.isDarwin() or target.result.cpu.arch != b.graph.host.result.cpu.arch;
-
     if (target.result.os.tag == .macos) {
         beam.linkFramework("CoreFoundation");
         beam.linkSystemLibrary("pthread");

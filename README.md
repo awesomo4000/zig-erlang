@@ -49,17 +49,17 @@ zig build -Dtarget=x86_64-linux-gnu
 - ✅ 30/33 build steps succeed
 - ✅ ncurses made optional (skipped when cross-compiling)
 - ✅ `_GNU_SOURCE` flags added for Linux extensions
-- ✅ Platform-specific config.h generated via Docker
-- ⚠️ 6 remaining errors (termcap.h + ARM atomics in x86 JIT code)
+- ✅ Platform-specific config.h generated via Docker (without termcap)
+- ⚠️ 5 remaining errors (ARM JIT code compiled for x86 target)
 
 **Generating Linux config.h:**
 ```bash
-# Use Docker to generate Linux-specific configuration
+# Use Docker to generate Linux-specific configuration (without termcap for cross-compile)
 docker run --rm -v $(pwd)/otp_src_28.1:/tmp/otp -w /tmp/otp \
   debian:bookworm bash -c \
   "apt-get update -qq && \
-   apt-get install -y -qq build-essential autoconf perl libncurses-dev && \
-   ./configure --host=x86_64-unknown-linux-gnu"
+   apt-get install -y -qq build-essential autoconf perl && \
+   ./configure --host=x86_64-unknown-linux-gnu --without-termcap"
 ```
 
 **Important:** The OTP source tarball is located at `erlang-source/otp_src_28.1.tar.gz`
