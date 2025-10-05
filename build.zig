@@ -334,6 +334,7 @@ fn buildERTS(
     const base_flags = if (target.result.os.tag == .windows)
         // Windows-specific flags
         // Note: zig automatically defines _WIN32_WINNT, so we don't redefine it
+        // STATIC_ERLANG_DRIVER prevents macro conflicts in erl_win_dyn_driver.h
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
@@ -341,6 +342,8 @@ fn buildERTS(
             "-DUSE_THREADS",
             "-D__WIN32__",
             "-DWINVER=0x0600",
+            "-DSTATIC_ERLANG_DRIVER",
+            "-DSTATIC_ERLANG_NIF",
             "-std=c11",
             "-fno-common",
             "-fno-strict-aliasing",
@@ -719,7 +722,21 @@ fn buildERTS(
         }
         const jit_cpp_sources = jit_cpp_sources_buf[0..];
 
-        const cpp_flags = if (target.result.os.tag == .linux)
+        const cpp_flags = if (target.result.os.tag == .windows)
+            &[_][]const u8{
+                "-DHAVE_CONFIG_H",
+                "-D_THREAD_SAFE",
+                "-D_REENTRANT",
+                "-DUSE_THREADS",
+                "-D__WIN32__",
+                "-DWINVER=0x0600",
+                "-DSTATIC_ERLANG_DRIVER",
+                "-DSTATIC_ERLANG_NIF",
+                "-DBEAMASM",
+                "-std=c++17",
+                "-fno-common",
+            }
+        else if (target.result.os.tag == .linux)
             &[_][]const u8{
                 "-DHAVE_CONFIG_H",
                 "-D_THREAD_SAFE",
