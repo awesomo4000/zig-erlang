@@ -107,6 +107,11 @@ pub fn buildZstd(
         .flags = &.{"-std=c11"},
     });
 
+    // Add x86_64 assembly optimizations when targeting x86
+    if (target.result.cpu.arch == .x86_64) {
+        zstd.addAssemblyFile(b.path(zstd_path ++ "/decompress/huf_decompress_amd64.S"));
+    }
+
     return zstd;
 }
 
@@ -385,7 +390,7 @@ pub fn buildAsmjit(
         asmjit_path ++ "/core/zonevector.cpp",
     };
 
-    // ARM64-specific C++ sources
+    // Architecture-specific C++ sources
     const arm_sources = [_][]const u8{
         asmjit_path ++ "/arm/a64assembler.cpp",
         asmjit_path ++ "/arm/a64builder.cpp",
@@ -400,13 +405,33 @@ pub fn buildAsmjit(
         asmjit_path ++ "/arm/armformatter.cpp",
     };
 
+    const x86_sources = [_][]const u8{
+        asmjit_path ++ "/x86/x86assembler.cpp",
+        asmjit_path ++ "/x86/x86builder.cpp",
+        asmjit_path ++ "/x86/x86compiler.cpp",
+        asmjit_path ++ "/x86/x86emithelper.cpp",
+        asmjit_path ++ "/x86/x86formatter.cpp",
+        asmjit_path ++ "/x86/x86func.cpp",
+        asmjit_path ++ "/x86/x86instapi.cpp",
+        asmjit_path ++ "/x86/x86instdb.cpp",
+        asmjit_path ++ "/x86/x86operand.cpp",
+        asmjit_path ++ "/x86/x86rapass.cpp",
+    };
+
     asmjit.addCSourceFiles(.{
         .files = &core_sources,
         .flags = &asmjit_flags,
     });
 
+    // Select architecture-specific sources based on target
+    const arch_sources = switch (target.result.cpu.arch) {
+        .aarch64, .aarch64_be => &arm_sources,
+        .x86_64, .x86 => &x86_sources,
+        else => &arm_sources, // Default to ARM
+    };
+
     asmjit.addCSourceFiles(.{
-        .files = &arm_sources,
+        .files = arch_sources,
         .flags = &asmjit_flags,
     });
 
