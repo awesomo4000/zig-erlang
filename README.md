@@ -105,7 +105,7 @@ Modularized for AI context optimization:
 - `build.zig` - Main build logic, ERTS compilation, cross-compilation
 - `build/codegen.zig` - Code generation (Perl scripts, YCF transformations)
 - `build/vendor_libs.zig` - Vendor libraries (zlib, zstd, pcre, ryu, asmjit)
-- `build/termcap/termcap.zig` - Minimal termcap implementation
+- `build/termcap_mini.zig` - Minimal termcap implementation
 - `build/linux_compat.c` - Linux compatibility (closefrom implementation)
 - `build/zig_compat.h` - Compatibility for musl vs glibc
 - `scripts/compile-all-targets.sh` - Build all 4 targets

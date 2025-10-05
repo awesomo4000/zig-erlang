@@ -11,7 +11,7 @@ pub fn buildTermcap(
     const termcap = b.addObject(.{
         .name = "termcap",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("build/termcap/termcap.zig"),
+            .root_source_file = b.path("build/termcap_mini.zig"),
             .target = target,
             .optimize = optimize,
         }),
