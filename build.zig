@@ -346,7 +346,7 @@ fn buildERTS(
             "-DWINVER=0x0600",
             "-DSTATIC_ERLANG_DRIVER",
             "-DSTATIC_ERLANG_NIF",
-            "-std=c11",
+            "-std=gnu99",
             "-fms-extensions",
             "-fno-common",
             "-fno-strict-aliasing",
@@ -361,6 +361,7 @@ fn buildERTS(
             "-Wno-comment",
             "-Wno-incompatible-pointer-types-discards-qualifiers",
             "-Wno-unused-value",
+            "-Wno-return-type",
         }
     else if (target.result.os.tag == .linux)
         // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
