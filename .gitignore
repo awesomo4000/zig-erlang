@@ -3,3 +3,5 @@ erlang-source/
 otp_src_28.1/
 .zig-cache/
 zig-out/
+ideas/
+aarch64-macos-none/
