@@ -7,7 +7,6 @@ Building Erlang/OTP 28.1 BEAM VM with JIT using the Zig build system.
 ```bash
 # Extract sources (if not already done)
 tar -xzf sources/otp_src_28.1.tar.gz -C sources/
-tar -xzf sources/ncurses-6.5.tar.gz -C sources/
 
 # Build
 zig build
