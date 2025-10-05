@@ -39,10 +39,11 @@ pub fn generateSources(
 
     // Generate erl_alloc_types.h
     const alloc_types_out = b.fmt("{s}/erl_alloc_types.h", .{gen_dir});
+    const os_var = if (target.result.os.tag == .windows) "win32" else "unix";
     const alloc_vars = if (enable_jit)
-        &[_][]const u8{ "threads", "nofrag", "beamasm", "unix" }
+        &[_][]const u8{ "threads", "nofrag", "beamasm", os_var }
     else
-        &[_][]const u8{ "threads", "nofrag", "unix" };
+        &[_][]const u8{ "threads", "nofrag", os_var };
 
     const gen_alloc_cmd = b.addSystemCommand(&.{
         "perl",

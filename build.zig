@@ -336,6 +336,7 @@ fn buildERTS(
         // Note: zig automatically defines _WIN32_WINNT, so we don't redefine it
         // STATIC_ERLANG_DRIVER prevents macro conflicts in erl_win_dyn_driver.h
         // -fms-extensions enables __try/__except SEH support
+        // Permissive flags needed for OTP's Windows C code (works with MSVC)
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
@@ -349,6 +350,17 @@ fn buildERTS(
             "-fms-extensions",
             "-fno-common",
             "-fno-strict-aliasing",
+            "-Wno-visibility",
+            "-Wno-incompatible-pointer-types",
+            "-Wno-int-conversion",
+            "-Wno-deprecated-non-prototype",
+            "-Wno-incompatible-function-pointer-types",
+            "-Wno-pointer-sign",
+            "-Wno-implicit-function-declaration",
+            "-Wno-incompatible-library-redeclaration",
+            "-Wno-comment",
+            "-Wno-incompatible-pointer-types-discards-qualifiers",
+            "-Wno-unused-value",
         }
     else if (target.result.os.tag == .linux)
         // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
@@ -379,7 +391,7 @@ fn buildERTS(
         };
 
     // For JIT builds, add BEAMASM to all C files
-    const max_base_flags = 12; // Max length of base_flags (Windows with all defines)
+    const max_base_flags = 32; // Buffer size for base_flags (plenty of headroom)
     var common_flags_buf: [max_base_flags + 1][]const u8 = undefined;
     const common_flags = if (options.enable_jit) blk: {
         @memcpy(common_flags_buf[0..base_flags.len], base_flags);
@@ -737,6 +749,18 @@ fn buildERTS(
                 "-DBEAMASM",
                 "-std=c++17",
                 "-fno-common",
+                "-fms-extensions",
+                "-Wno-visibility",
+                "-Wno-incompatible-pointer-types",
+                "-Wno-int-conversion",
+                "-Wno-deprecated-non-prototype",
+                "-Wno-incompatible-function-pointer-types",
+                "-Wno-pointer-sign",
+                "-Wno-implicit-function-declaration",
+                "-Wno-incompatible-library-redeclaration",
+                "-Wno-comment",
+                "-Wno-incompatible-pointer-types-discards-qualifiers",
+                "-Wno-unused-value",
             }
         else if (target.result.os.tag == .linux)
             &[_][]const u8{
