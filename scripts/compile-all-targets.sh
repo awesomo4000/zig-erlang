@@ -45,14 +45,14 @@ for target in "${TARGETS[@]}"; do
         zig build -Dtarget="$target"
     fi
 
-    # Copy binary with platform suffix
-    cp zig-out/bin/beam.smp "zig-out/beam.smp-$target"
-
-    echo "✓ Built beam.smp-$target"
+    echo "✓ Built $target"
     echo
 done
 
 echo "All targets built successfully!"
 echo
-echo "Binaries created:"
-ls -lh zig-out/beam.smp-*
+echo "Output directories:"
+ls -d zig-out/*/
+echo
+echo "Binaries:"
+ls -lh zig-out/*/bin/beam.smp

@@ -6,19 +6,14 @@ pub fn buildNcurses(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    target_str: []const u8,
 ) *std.Build.Step.Compile {
-
-    // Determine target string for build directory
-    const target_str = b.fmt("{s}-{s}", .{
-        @tagName(target.result.cpu.arch),
-        @tagName(target.result.os.tag),
-    });
 
     // Build directory - temporary build location in cache
     const build_dir = b.fmt(".zig-cache/ncurses-build/{s}", .{target_str});
 
-    // Library paths (relative)
-    const lib_output_rel = "lib/libtinfo.a"; // Relative to zig-out
+    // Library paths (relative to platform-specific directory)
+    const lib_output_rel = b.fmt("{s}/lib/libtinfo.a", .{target_str}); // Relative to zig-out
     const lib_build_path = b.fmt("{s}/lib/libtinfo.a", .{build_dir});
 
     // Check if already built (cache)
@@ -97,10 +92,11 @@ pub fn buildNcurses(
 
     // Copy library to install prefix lib directory
     const lib_output_path = b.fmt("{s}/{s}", .{ b.install_prefix, lib_output_rel });
+    const lib_output_dir = b.fmt("{s}/{s}/lib", .{ b.install_prefix, target_str });
     const copy_lib_cmd = b.addSystemCommand(&.{
         "sh",
         "-c",
-        b.fmt("mkdir -p {s}/lib && cp {s} {s}", .{ b.install_prefix, lib_build_path, lib_output_path }),
+        b.fmt("mkdir -p {s} && cp {s} {s}", .{ lib_output_dir, lib_build_path, lib_output_path }),
     });
     copy_lib_cmd.step.dependOn(&make_cmd.step);
 

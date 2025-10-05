@@ -505,6 +505,7 @@ pub fn buildNcurses(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
+    target_str: []const u8,
 ) *std.Build.Step.Compile {
-    return ncurses_lib.buildNcurses(b, target, optimize);
+    return ncurses_lib.buildNcurses(b, target, optimize, target_str);
 }

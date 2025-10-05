@@ -30,12 +30,18 @@ pub fn build(b: *std.Build) void {
 
     const zlib = vendor_libs.buildZlib(b, target, optimize);
     const zstd = vendor_libs.buildZstd(b, target, optimize);
+    // Determine target directory name for platform-specific output
+    const target_str = b.fmt("{s}-{s}", .{
+        @tagName(target.result.cpu.arch),
+        @tagName(target.result.os.tag),
+    });
+
     const ryu = vendor_libs.buildRyu(b, target, optimize);
     const pcre = vendor_libs.buildPcre(b, target, optimize, config_dir);
     const ethread = vendor_libs.buildEthread(b, target, optimize, config_dir);
 
     // Build vendored ncurses for all targets using zig cc
-    const ncurses = vendor_libs.buildNcurses(b, target, optimize);
+    const ncurses = vendor_libs.buildNcurses(b, target, optimize, target_str);
 
     const asmjit = if (enable_jit) vendor_libs.buildAsmjit(b, target, optimize) else null;
 
@@ -60,8 +66,15 @@ pub fn build(b: *std.Build) void {
     // Installation
     // ============================================================================
 
+    // Install to platform-specific directory: zig-out/{target}/bin/beam.smp
     const install_step = b.getInstallStep();
-    install_step.dependOn(&b.addInstallArtifact(beam, .{}).step);
+    install_step.dependOn(&b.addInstallArtifact(beam, .{
+        .dest_dir = .{
+            .override = .{
+                .custom = b.fmt("{s}/bin", .{target_str}),
+            },
+        },
+    }).step);
 
     // ============================================================================
     // Tests
