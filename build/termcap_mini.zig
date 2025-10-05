@@ -1,8 +1,16 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("sys/ioctl.h");
-    @cInclude("unistd.h");
-});
+const builtin = @import("builtin");
+
+const c = if (builtin.os.tag == .windows)
+    @cImport({
+        @cDefine("WIN32_LEAN_AND_MEAN", {});
+        @cInclude("windows.h");
+    })
+else
+    @cImport({
+        @cInclude("sys/ioctl.h");
+        @cInclude("unistd.h");
+    });
 
 // Export C-compatible termcap API for Erlang
 // This is a minimal implementation that just returns ANSI escape sequences
@@ -74,17 +82,38 @@ export fn tgetstr(id: [*c]const u8, area: [*c][*c]u8) [*c]u8 {
 export fn tgetnum(id: [*c]const u8) c_int {
     const id_slice = std.mem.span(id);
 
-    // Get terminal size using ioctl
-    var ws: c.struct_winsize = undefined;
-    if (c.ioctl(c.STDOUT_FILENO, c.TIOCGWINSZ, &ws) == 0) {
-        // Columns
-        if (std.mem.eql(u8, id_slice, "co")) {
-            return @intCast(ws.ws_col);
+    if (builtin.os.tag == .windows) {
+        // Get terminal size using Windows Console API
+        const h = c.GetStdHandle(c.STD_OUTPUT_HANDLE);
+        if (h == c.INVALID_HANDLE_VALUE) {
+            return -1;
         }
 
-        // Lines
-        if (std.mem.eql(u8, id_slice, "li")) {
-            return @intCast(ws.ws_row);
+        var csbi: c.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+        if (c.GetConsoleScreenBufferInfo(h, &csbi) != 0) {
+            // Columns
+            if (std.mem.eql(u8, id_slice, "co")) {
+                return @intCast(csbi.srWindow.Right - csbi.srWindow.Left + 1);
+            }
+
+            // Lines
+            if (std.mem.eql(u8, id_slice, "li")) {
+                return @intCast(csbi.srWindow.Bottom - csbi.srWindow.Top + 1);
+            }
+        }
+    } else {
+        // Get terminal size using ioctl (Unix)
+        var ws: c.struct_winsize = undefined;
+        if (c.ioctl(c.STDOUT_FILENO, c.TIOCGWINSZ, &ws) == 0) {
+            // Columns
+            if (std.mem.eql(u8, id_slice, "co")) {
+                return @intCast(ws.ws_col);
+            }
+
+            // Lines
+            if (std.mem.eql(u8, id_slice, "li")) {
+                return @intCast(ws.ws_row);
+            }
         }
     }
 

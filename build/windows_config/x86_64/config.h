@@ -233,7 +233,7 @@
 /* #undef ETHR_HAVE_PTHREAD_SET_NAME_NP_2 */
 
 /* Define if you have the pthread_spin_lock function. */
-#define ETHR_HAVE_PTHREAD_SPIN_LOCK 1
+/* #undef ETHR_HAVE_PTHREAD_SPIN_LOCK */
 
 /* Define if you have the pthread_yield() function. */
 /* #undef ETHR_HAVE_PTHREAD_YIELD */
@@ -437,7 +437,7 @@
 #define ETHR_TRUST_GCC_ATOMIC_BUILTINS_MEMORY_BARRIERS 0
 
 /* Define if you have win32 threads */
-/* #undef ETHR_WIN32_THREADS */
+#define ETHR_WIN32_THREADS 1
 
 /* Define if x86/x86_64 out of order instructions should be synchronized */
 /* #undef ETHR_X86_OUT_OF_ORDER */
@@ -1469,3 +1469,11 @@
 
 #endif /* __ERTS_CONFIG_H__ */
 
+
+/* Ensure Windows headers are available for all includes */
+#if defined(_WIN32) || defined(__WIN32__)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif

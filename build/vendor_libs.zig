@@ -271,7 +271,11 @@ pub fn buildEthread(
     const lib_src_path = otp_root ++ "/erts/lib_src";
     const erts_path = otp_root ++ "/erts";
 
-    // For Windows, use pre-generated config headers from build/windows_config/
+    // Add include paths - order matters!
+    ethread.addIncludePath(b.path(erts_path ++ "/include"));
+    ethread.addIncludePath(b.path(erts_path ++ "/include/internal"));
+
+    // For Windows, use pre-generated config headers from build/windows_config/ (must be AFTER erts/include paths)
     if (target.result.os.tag == .windows) {
         const cpu = @tagName(target.result.cpu.arch);
         ethread.addIncludePath(b.path(b.fmt("build/windows_config/{s}", .{cpu}))); // For config.h and ethread_header_config.h
@@ -280,8 +284,6 @@ pub fn buildEthread(
         ethread.addIncludePath(b.path(b.fmt("{s}/include/{s}", .{erts_path, config_dir})));
         ethread.addIncludePath(b.path(b.fmt("{s}/include/internal/{s}", .{erts_path, config_dir})));
     }
-    ethread.addIncludePath(b.path(erts_path ++ "/include"));
-    ethread.addIncludePath(b.path(erts_path ++ "/include/internal"));
 
     // Platform-specific threading sources
     const platform_sources = if (target.result.os.tag == .windows)
@@ -310,6 +312,7 @@ pub fn buildEthread(
 
     // Compile flags - platform-specific
     const ethread_flags = if (target.result.os.tag == .windows)
+        // Note: zig automatically defines _WIN32_WINNT, so we don't redefine it
         &[_][]const u8{
             "-std=c11",
             "-DHAVE_CONFIG_H",
@@ -317,11 +320,7 @@ pub fn buildEthread(
             "-D_REENTRANT",
             "-DUSE_THREADS",
             "-D__WIN32__",
-            "-DWIN32_THREADS",
-            "-DWIN32_LEAN_AND_MEAN",
-            // Include windows.h early to get DWORD and other Windows types
-            "-include",
-            "windows.h",
+            "-DWINVER=0x0600",
         }
     else if (target.result.os.tag == .linux)
         &[_][]const u8{

@@ -46,22 +46,23 @@
 /* #undef ETHR_DISABLE_NATIVE_IMPLS */
 
 /* Define if you have win32 threads */
-/* #undef ETHR_WIN32_THREADS */
+#define ETHR_WIN32_THREADS 1
 
 /* Define if you have pthreads */
-#define ETHR_PTHREADS 1
+/* #undef ETHR_PTHREADS */
 
 /* Define if you need the <nptl/pthread.h> header file. */
 /* #undef ETHR_NEED_NPTL_PTHREAD_H */
 
 /* Define if you have the <pthread.h> header file. */
-#define ETHR_HAVE_PTHREAD_H 1
+/* #undef ETHR_HAVE_PTHREAD_H */
+#define ETHR_WIN32_THREADS 1
 
 /* Define if the pthread.h header file is in pthread/mit directory. */
 /* #undef ETHR_HAVE_MIT_PTHREAD_H */
 
 /* Define if you have the pthread_spin_lock function. */
-#define ETHR_HAVE_PTHREAD_SPIN_LOCK 1
+/* #undef ETHR_HAVE_PTHREAD_SPIN_LOCK */
 
 /* Define if you want to force usage of pthread rwlocks */
 /* #undef ETHR_FORCE_PTHREAD_RWLOCK */

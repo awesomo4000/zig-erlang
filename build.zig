@@ -83,13 +83,15 @@ pub fn build(b: *std.Build) void {
             },
         },
     }).step);
-    install_step.dependOn(&b.addInstallArtifact(child_setup, .{
-        .dest_dir = .{
-            .override = .{
-                .custom = b.fmt("{s}/bin", .{target_str}),
+    if (child_setup) |cs| {
+        install_step.dependOn(&b.addInstallArtifact(cs, .{
+            .dest_dir = .{
+                .override = .{
+                    .custom = b.fmt("{s}/bin", .{target_str}),
+                },
             },
-        },
-    }).step);
+        }).step);
+    }
 
     // ============================================================================
     // Tests
@@ -130,7 +132,12 @@ fn buildErlChildSetup(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     options: ChildSetupOptions,
-) *std.Build.Step.Compile {
+) ?*std.Build.Step.Compile {
+    // erl_child_setup is Unix-only, skip for Windows
+    if (target.result.os.tag == .windows) {
+        return null;
+    }
+
     // Create module for erl_child_setup
     const child_module = b.createModule(.{
         .target = target,
@@ -272,7 +279,10 @@ fn buildERTS(
     beam.addIncludePath(b.path(erts_path ++ "/include/internal"));
     beam.addIncludePath(b.path(emulator_path));
     beam.addIncludePath(b.path(emulator_path ++ "/beam"));
-    beam.addIncludePath(b.path(emulator_path ++ "/sys/unix"));
+
+    // Use platform-specific sys directory
+    const sys_dir = if (target.result.os.tag == .windows) "/sys/win32" else "/sys/unix";
+    beam.addIncludePath(b.path(b.fmt("{s}{s}", .{ emulator_path, sys_dir })));
     beam.addIncludePath(b.path(emulator_path ++ "/sys/common"));
     beam.addIncludePath(b.path(emulator_path ++ "/drivers/common"));
     beam.addIncludePath(b.path(emulator_path ++ "/drivers/unix"));
@@ -295,6 +305,15 @@ fn buildERTS(
 
     // Platform-specific config (from configure)
     const target_config_dir = getConfigDirName(b, target);
+
+    // For Windows, use pre-generated config from build/windows_config/
+    if (target.result.os.tag == .windows) {
+        const cpu = @tagName(target.result.cpu.arch);
+        beam.addIncludePath(b.path(b.fmt("build/windows_config/{s}", .{cpu})));
+    } else {
+        beam.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, target_config_dir})));
+    }
+
     beam.addIncludePath(b.path(b.fmt("{s}/include/{s}", .{erts_path, target_config_dir})));
     beam.addIncludePath(b.path(b.fmt("{s}/include/internal/{s}", .{erts_path, target_config_dir})));
     beam.addIncludePath(b.path(b.fmt("{s}/{s}", .{erts_path, target_config_dir})));
@@ -311,9 +330,24 @@ fn buildERTS(
     // Compiler flags
     // ========================================================================
 
-    // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
-    // Include zig_compat.h to provide missing function declarations for musl libc
-    const base_flags = if (target.result.os.tag == .linux)
+    // Platform-specific base flags
+    const base_flags = if (target.result.os.tag == .windows)
+        // Windows-specific flags
+        // Note: zig automatically defines _WIN32_WINNT, so we don't redefine it
+        &[_][]const u8{
+            "-DHAVE_CONFIG_H",
+            "-D_THREAD_SAFE",
+            "-D_REENTRANT",
+            "-DUSE_THREADS",
+            "-D__WIN32__",
+            "-DWINVER=0x0600",
+            "-std=c11",
+            "-fno-common",
+            "-fno-strict-aliasing",
+        }
+    else if (target.result.os.tag == .linux)
+        // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
+        // Include zig_compat.h to provide missing function declarations for musl libc
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
@@ -327,6 +361,7 @@ fn buildERTS(
             "-fno-strict-aliasing",
         }
     else
+        // macOS and other Unix-like systems
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
@@ -554,10 +589,29 @@ fn buildERTS(
     });
 
     // ========================================================================
-    // System sources (Unix)
+    // System sources (platform-specific)
     // ========================================================================
 
-    const sys_sources = [_][]const u8{
+    const sys_sources = if (target.result.os.tag == .windows) [_][]const u8{
+        emulator_path ++ "/sys/win32/sys.c",
+        emulator_path ++ "/sys/win32/sys_env.c",
+        emulator_path ++ "/sys/win32/sys_float.c",
+        emulator_path ++ "/sys/win32/sys_time.c",
+        emulator_path ++ "/sys/win32/sys_interrupt.c",
+        emulator_path ++ "/sys/win32/erl_win32_sys_ddll.c",
+        emulator_path ++ "/sys/win32/erl_poll.c",
+        emulator_path ++ "/sys/win32/dosmap.c",
+        // Common sources
+        emulator_path ++ "/sys/common/erl_check_io.c",
+        emulator_path ++ "/sys/common/erl_mseg.c",
+        emulator_path ++ "/sys/common/erl_mmap.c",
+        emulator_path ++ "/sys/common/erl_osenv.c",
+        emulator_path ++ "/sys/common/erl_sys_common_misc.c",
+        emulator_path ++ "/sys/common/erl_os_monotonic_time_extender.c",
+        // Windows NIFs
+        emulator_path ++ "/nifs/win32/win_prim_file.c",
+        emulator_path ++ "/nifs/win32/win_socket_asyncio.c",
+    } else [_][]const u8{
         emulator_path ++ "/sys/unix/sys.c",
         emulator_path ++ "/sys/unix/sys_drivers.c",
         emulator_path ++ "/sys/unix/sys_env.c",
@@ -585,30 +639,38 @@ fn buildERTS(
 
     // Compile erl_poll.c twice with different flags to generate both
     // kernel poll (epoll/kqueue) and fallback (select/poll) versions
-    const poll_kernel_flags = b.allocator.alloc([]const u8, common_flags.len + 1) catch @panic("OOM");
-    @memcpy(poll_kernel_flags[0..common_flags.len], common_flags);
-    poll_kernel_flags[common_flags.len] = "-DERTS_KERNEL_POLL_VERSION";
+    // Skip for Windows - Windows uses its own erl_poll.c in sys/win32
+    if (target.result.os.tag != .windows) {
+        const poll_kernel_flags = b.allocator.alloc([]const u8, common_flags.len + 1) catch @panic("OOM");
+        @memcpy(poll_kernel_flags[0..common_flags.len], common_flags);
+        poll_kernel_flags[common_flags.len] = "-DERTS_KERNEL_POLL_VERSION";
 
-    beam.addCSourceFiles(.{
-        .files = &[_][]const u8{emulator_path ++ "/sys/common/erl_poll.c"},
-        .flags = poll_kernel_flags,
-    });
+        beam.addCSourceFiles(.{
+            .files = &[_][]const u8{emulator_path ++ "/sys/common/erl_poll.c"},
+            .flags = poll_kernel_flags,
+        });
 
-    const poll_flbk_flags = b.allocator.alloc([]const u8, common_flags.len + 1) catch @panic("OOM");
-    @memcpy(poll_flbk_flags[0..common_flags.len], common_flags);
-    poll_flbk_flags[common_flags.len] = "-DERTS_NO_KERNEL_POLL_VERSION";
+        const poll_flbk_flags = b.allocator.alloc([]const u8, common_flags.len + 1) catch @panic("OOM");
+        @memcpy(poll_flbk_flags[0..common_flags.len], common_flags);
+        poll_flbk_flags[common_flags.len] = "-DERTS_NO_KERNEL_POLL_VERSION";
 
-    beam.addCSourceFiles(.{
-        .files = &[_][]const u8{emulator_path ++ "/sys/common/erl_poll.c"},
-        .flags = poll_flbk_flags,
-    });
+        beam.addCSourceFiles(.{
+            .files = &[_][]const u8{emulator_path ++ "/sys/common/erl_poll.c"},
+            .flags = poll_flbk_flags,
+        });
+    }
 
     // ========================================================================
-    // Main entry point (Unix-specific)
+    // Main entry point (platform-specific)
     // ========================================================================
+
+    const main_file = if (target.result.os.tag == .windows)
+        emulator_path ++ "/sys/win32/erl_main.c"
+    else
+        emulator_path ++ "/sys/unix/erl_main.c";
 
     beam.addCSourceFile(.{
-        .file = b.path(emulator_path ++ "/sys/unix/erl_main.c"),
+        .file = b.path(main_file),
         .flags = common_flags,
     });
 
