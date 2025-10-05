@@ -24,62 +24,67 @@ zig-out/bin/beam.smp
 ## What This Does
 
 Builds a complete BEAM VM (56MB executable) without using autoconf/make:
-- ✅ JIT compiler (BEAMASM) for ARM64
+- ✅ JIT compiler (BEAMASM) for ARM64 and x86_64
 - ✅ All runtime systems (scheduler, GC, etc.)
 - ✅ NIFs and drivers
-- ✅ Vendored libraries (zlib, zstd, pcre, ryu)
+- ✅ Vendored libraries (zlib, zstd, pcre, ryu, ncurses/terminfo)
 - ✅ Real YCF coroutine transformations (9,530 lines generated)
+- ✅ Cross-compilation support for 4 targets
 - ⚠️ No preloaded modules (VM needs external setup)
 
 ## Architecture
 
-- **Primary Target:** ARM64 macOS (aarch64-macos-none)
-- **Cross-Compilation:** x86_64 Linux (experimental, 30/33 steps working)
 - **Build Tool:** Zig 0.15.1
-- **Source:** Erlang/OTP 28.1 (unmodified)
+- **Source:** Erlang/OTP 28.1 + ncurses 6.5 (unmodified)
 - **Output:** Static executable with JIT support
 
 ### Cross-Compilation Support
 
-Cross-compile for Linux:
+Build for all supported targets:
 ```bash
+# Build for specific target
 zig build -Dtarget=x86_64-linux-gnu
+zig build -Dtarget=aarch64-linux-gnu
+zig build -Dtarget=x86_64-macos
+zig build -Dtarget=aarch64-macos  # or just: zig build
+
+# Build all targets at once
+./scripts/compile-all-targets.sh
 ```
 
-**Cross-Compilation Status (Linux x86_64):**
-- ✅ 30/33 build steps succeed
-- ✅ ncurses made optional (skipped when cross-compiling)
-- ✅ `_GNU_SOURCE` flags added for Linux extensions
-- ✅ Platform-specific config.h generated via Docker (without termcap)
-- ⚠️ 5 remaining errors (ARM JIT code compiled for x86 target)
+**Supported Targets (All Working):**
+- ✅ **aarch64-macos** - ARM64 macOS (Apple Silicon)
+- ✅ **x86_64-macos** - Intel macOS
+- ✅ **aarch64-linux-gnu** - ARM64 Linux (glibc)
+- ✅ **x86_64-linux-gnu** - x86_64 Linux (glibc)
 
-**Generating Linux config.h:**
-```bash
-# Use Docker to generate Linux-specific configuration (without termcap for cross-compile)
-docker run --rm -v $(pwd)/sources/otp-28.1:/tmp/otp -w /tmp/otp \
-  debian:bookworm bash -c \
-  "apt-get update -qq && \
-   apt-get install -y -qq build-essential autoconf perl && \
-   ./configure --host=x86_64-unknown-linux-gnu --without-termcap"
-```
+**Key Features:**
+- Architecture-aware JIT backend selection (ARM64/x86_64)
+- Vendored ncurses (libtinfo.a) built with zig cc for each target
+- Platform-specific configurations and flags
+- Static linking of all dependencies
 
-**Important:** Source tarballs are located in `sources/` directory.
+**Important:** Source tarballs must be extracted to `sources/` directory before building.
 
 ### Build System Structure
 
 Modularized for AI context optimization:
-- `build.zig` (999 lines) - Main build logic and ERTS compilation
-- `build/codegen.zig` (305 lines) - Code generation (Perl scripts, YCF)
-- `build/vendor_libs.zig` (447 lines) - Vendor library builds (zlib, zstd, pcre, etc.)
+- `build.zig` - Main build logic, ERTS compilation, cross-compilation
+- `build/codegen.zig` - Code generation (Perl scripts, YCF transformations)
+- `build/vendor_libs.zig` - Vendor libraries (zlib, zstd, pcre, ryu, asmjit)
+- `build/ncurses_lib.zig` - ncurses/terminfo build with zig cc
+- `build/zig_compat.h` - Compatibility for musl vs glibc
+- `scripts/compile-all-targets.sh` - Build all 4 targets
 
 ## Status
 
 **Working:**
-- ✅ Compiles all BEAM VM source files
-- ✅ Links successfully (zero undefined symbols)
-- ✅ Generates 56MB ARM64 executable
+- ✅ Cross-compilation to 4 targets (macOS ARM64/x86_64, Linux ARM64/x86_64)
+- ✅ Architecture-specific JIT compilation (BEAMASM)
+- ✅ All vendor libraries built per-target with zig cc
+- ✅ ncurses terminfo library vendored and cross-compiled
+- ✅ Zero undefined symbols, all targets link successfully
 - ✅ YCF yielding transformations (real coroutine implementations)
-- ✅ All 33 build steps succeed
 
 **Not Yet Implemented:**
 - ⚠️ Runtime environment setup (BINDIR, preloaded modules)
