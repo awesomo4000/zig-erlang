@@ -235,153 +235,105 @@ fn generateSources(b: *std.Build, target: std.Build.ResolvedTarget, enable_jit: 
     gen_driver_tab.step.dependOn(&mkdir_cmd.step);
     gen_step.dependOn(&gen_driver_tab.step);
 
-    // Generate stub YCF headers (Yielding C Functions)
-    // These are minimal stubs - full YCF support would require running the YCF tool
+    // ========================================================================
+    // YCF (Yielding C Functions) - Generate real yielding function headers
+    // ========================================================================
 
-    // YCF common macros and includes
-    const ycf_common_header =
-        \\/* YCF stub - yielding versions not generated */
-        \\#ifndef YCF_YIELDING_C_FUN_HELPERS
-        \\#define YCF_YIELDING_C_FUN_HELPERS 1
+    // Build the YCF tool (always optimized for fast build-time execution)
+    const ycf_tool = buildYcf(b, target, .ReleaseFast);
+
+    // Generate utils.ycf.h from beam/utils.c
+    const utils_ycf_out = b.fmt("{s}/utils.ycf.h", .{gen_dir});
+    const gen_utils_ycf = b.addRunArtifact(ycf_tool);
+    gen_utils_ycf.addArgs(&.{
+        "-yield",
+        "-only_yielding_funs",
+        "-f", "erts_qsort",
+        "-f", "erts_qsort_helper",
+        "-f", "erts_qsort_partion_array",
+        "-output_file_name", utils_ycf_out,
+        emulator_path ++ "/beam/utils.c",
+    });
+    gen_utils_ycf.step.dependOn(&ycf_tool.step);
+    gen_utils_ycf.step.dependOn(&mkdir_cmd.step);
+    gen_step.dependOn(&gen_utils_ycf.step);
+
+    // Generate erl_map.ycf.h from beam/erl_map.c
+    const map_ycf_out = b.fmt("{s}/erl_map.ycf.h", .{gen_dir});
+    const gen_map_ycf = b.addRunArtifact(ycf_tool);
+    gen_map_ycf.addArgs(&.{
+        "-yield",
+        "-static_aux_funs",
+        "-only_yielding_funs",
+        "-fnoauto", "maps_keys_1_helper",
+        "-fnoauto", "maps_values_1_helper",
+        "-fnoauto", "maps_from_keys_2_helper",
+        "-fnoauto", "maps_from_list_1_helper",
+        // Also transform functions called by the above (wrapped in INCLUDE_YCF_TRANSFORMED_ONLY_FUNCTIONS)
+        "-f", "hashmap_keys",
+        "-f", "hashmap_values",
+        "-f", "hashmap_from_validated_list",
+        "-output_file_name", map_ycf_out,
+        emulator_path ++ "/beam/erl_map.c",
+    });
+    gen_map_ycf.step.dependOn(&ycf_tool.step);
+    gen_map_ycf.step.dependOn(&mkdir_cmd.step);
+    gen_step.dependOn(&gen_map_ycf.step);
+
+    // Generate erl_db_insert_list.ycf.h from beam/erl_db.c
+    const db_insert_ycf_out = b.fmt("{s}/erl_db_insert_list.ycf.h", .{gen_dir});
+    const gen_db_insert_ycf = b.addRunArtifact(ycf_tool);
+    gen_db_insert_ycf.addArgs(&.{
+        "-yield",
+        "-static_aux_funs",
+        "-only_yielding_funs",
+        "-f", "ets_insert_2_list_check",
+        "-f", "ets_insert_new_2_list_has_member",
+        "-f", "ets_insert_2_list_from_p_heap",
+        "-f", "ets_insert_2_list_destroy_copied_dbterms",
+        "-f", "ets_insert_2_list_copy_term_list",
+        "-f", "ets_insert_new_2_dbterm_list_has_member",
+        "-f", "ets_insert_2_list_insert_db_term_list",
+        "-f", "ets_insert_2_list",
+        "-fnoauto", "ets_insert_2_list_lock_tbl",
+        "-output_file_name", db_insert_ycf_out,
+        emulator_path ++ "/beam/erl_db.c",
+    });
+    gen_db_insert_ycf.step.dependOn(&ycf_tool.step);
+    gen_db_insert_ycf.step.dependOn(&mkdir_cmd.step);
+    gen_step.dependOn(&gen_db_insert_ycf.step);
+
+    // Generate preload.c - minimal stub with no preloaded modules
+    const preload_out = b.fmt("{s}/preload.c", .{gen_dir});
+    const preload_content =
+        \\/*
+        \\ * Minimal preload stub - no modules preloaded for minimal build
+        \\ * Generated for zig-erlang minimal build
+        \\ */
+        \\
+        \\#ifdef HAVE_CONFIG_H
+        \\#  include "config.h"
         \\#endif
         \\
-        \\/* YCF macros for special code blocks */
-        \\#ifndef ON_SAVE_YIELD_STATE
-        \\#define ON_SAVE_YIELD_STATE
-        \\#define ON_DESTROY_STATE
-        \\#define ON_DESTROY_STATE_OR_RETURN
-        \\#define YCF_SPECIAL_CODE_START(PARAM) if(0){
-        \\#define YCF_SPECIAL_CODE_END() }
-        \\#endif
+        \\#include "sys.h"
         \\
-        \\#include "erl_process.h"
-        \\#include "erl_nfunc_sched.h"
-        \\
+        \\/* Preload structure */
+        \\const struct {
+        \\   char* name;
+        \\   int size;
+        \\   const unsigned char* code;
+        \\} pre_loaded[] = {
+        \\  {0, 0, 0}  /* terminator */
+        \\};
         \\
     ;
-
-    const ycf_stubs = [_]struct { name: []const u8, content: []const u8 }{
-        .{
-            .name = "erl_map.ycf.h",
-            .content = ycf_common_header ++
-                \\/* Stub implementations for maps_from_list_1_helper YCF functions */
-                \\static Eterm maps_from_list_1_helper_ycf_gen_continue(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    return THE_NON_VALUE; /* Should not be called in non-yielding build */
-                \\}
-                \\static void maps_from_list_1_helper_ycf_gen_destroy(void *trap_state) {
-                \\    (void)trap_state; /* No-op in stub */
-                \\}
-                \\static Eterm maps_from_list_1_helper_ycf_gen_yielding(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context,
-                \\    void* (*ycf_yield_alloc_fun)(size_t,void*), void (*ycf_yield_free_fun)(void*,void*), void* ycf_yield_alloc_free_context,
-                \\    size_t ycf_stack_alloc_size_or_max_size, void* ycf_stack_alloc_data, Process* p, Eterm* bif_args) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    (void)ycf_yield_alloc_fun; (void)ycf_yield_free_fun; (void)ycf_yield_alloc_free_context;
-                \\    (void)ycf_stack_alloc_size_or_max_size; (void)ycf_stack_alloc_data; (void)p; (void)bif_args;
-                \\    return THE_NON_VALUE; /* Should not be called in non-yielding build */
-                \\}
-                \\
-                \\/* Stub implementations for maps_from_keys_2_helper YCF functions */
-                \\static Eterm maps_from_keys_2_helper_ycf_gen_continue(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\static void maps_from_keys_2_helper_ycf_gen_destroy(void *trap_state) {
-                \\    (void)trap_state;
-                \\}
-                \\static Eterm maps_from_keys_2_helper_ycf_gen_yielding(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context,
-                \\    void* (*ycf_yield_alloc_fun)(size_t,void*), void (*ycf_yield_free_fun)(void*,void*), void* ycf_yield_alloc_free_context,
-                \\    size_t ycf_stack_alloc_size_or_max_size, void* ycf_stack_alloc_data, Process* p, Eterm* bif_args) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    (void)ycf_yield_alloc_fun; (void)ycf_yield_free_fun; (void)ycf_yield_alloc_free_context;
-                \\    (void)ycf_stack_alloc_size_or_max_size; (void)ycf_stack_alloc_data; (void)p; (void)bif_args;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\
-                \\/* Stub implementations for maps_keys_1_helper YCF functions */
-                \\static Eterm maps_keys_1_helper_ycf_gen_continue(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\static void maps_keys_1_helper_ycf_gen_destroy(void *trap_state) {
-                \\    (void)trap_state;
-                \\}
-                \\static Eterm maps_keys_1_helper_ycf_gen_yielding(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context,
-                \\    void* (*ycf_yield_alloc_fun)(size_t,void*), void (*ycf_yield_free_fun)(void*,void*), void* ycf_yield_alloc_free_context,
-                \\    size_t ycf_stack_alloc_size_or_max_size, void* ycf_stack_alloc_data, Process* p, Eterm* bif_args) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    (void)ycf_yield_alloc_fun; (void)ycf_yield_free_fun; (void)ycf_yield_alloc_free_context;
-                \\    (void)ycf_stack_alloc_size_or_max_size; (void)ycf_stack_alloc_data; (void)p; (void)bif_args;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\
-                \\/* Stub implementations for maps_values_1_helper YCF functions */
-                \\static Eterm maps_values_1_helper_ycf_gen_continue(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\static void maps_values_1_helper_ycf_gen_destroy(void *trap_state) {
-                \\    (void)trap_state;
-                \\}
-                \\static Eterm maps_values_1_helper_ycf_gen_yielding(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context,
-                \\    void* (*ycf_yield_alloc_fun)(size_t,void*), void (*ycf_yield_free_fun)(void*,void*), void* ycf_yield_alloc_free_context,
-                \\    size_t ycf_stack_alloc_size_or_max_size, void* ycf_stack_alloc_data, Process* p, Eterm* bif_args) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    (void)ycf_yield_alloc_fun; (void)ycf_yield_free_fun; (void)ycf_yield_alloc_free_context;
-                \\    (void)ycf_stack_alloc_size_or_max_size; (void)ycf_stack_alloc_data; (void)p; (void)bif_args;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\
-            ,
-        },
-        .{
-            .name = "utils.ycf.h",
-            .content = ycf_common_header ++
-                \\/* No YCF functions needed for utils.c yet */
-                \\
-            ,
-        },
-        .{
-            .name = "erl_db_insert_list.ycf.h",
-            .content = ycf_common_header ++
-                \\/* Stub implementations for ets_insert_2_list YCF functions */
-                \\static Eterm ets_insert_2_list_ycf_gen_continue(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\static void ets_insert_2_list_ycf_gen_destroy(void *trap_state) {
-                \\    (void)trap_state;
-                \\}
-                \\static Eterm ets_insert_2_list_ycf_gen_yielding(long* ycf_nr_of_reductions_param, void** ycf_trap_state, void* ycf_extra_context,
-                \\    void* (*ycf_yield_alloc_fun)(size_t,void*), void (*ycf_yield_free_fun)(void*,void*), void* ycf_yield_alloc_free_context,
-                \\    size_t ycf_stack_alloc_size_or_max_size, void* ycf_stack_alloc_data,
-                \\    Process* p, Eterm table_id, Binary* btid, DbTable* tb, Eterm list, int is_insert_new) {
-                \\    (void)ycf_nr_of_reductions_param; (void)ycf_trap_state; (void)ycf_extra_context;
-                \\    (void)ycf_yield_alloc_fun; (void)ycf_yield_free_fun; (void)ycf_yield_alloc_free_context;
-                \\    (void)ycf_stack_alloc_size_or_max_size; (void)ycf_stack_alloc_data;
-                \\    (void)p; (void)table_id; (void)btid; (void)tb; (void)list; (void)is_insert_new;
-                \\    return THE_NON_VALUE;
-                \\}
-                \\
-            ,
-        },
-    };
-
-    for (ycf_stubs) |stub| {
-        const stub_path = b.fmt("{s}/{s}", .{ gen_dir, stub.name });
-        const create_stub = b.addSystemCommand(&.{
-            "sh",
-            "-c",
-            b.fmt("cat > {s} << 'YCFEOF'\n{s}\nYCFEOF", .{ stub_path, stub.content }),
-        });
-        create_stub.step.dependOn(&mkdir_cmd.step);
-        gen_step.dependOn(&create_stub.step);
-    }
-
-    // TODO: Add remaining Perl script invocations for code generation
-    // 1. make_driver_tab - generate driver table
-    // 2. make_preload - generate preloaded modules
-    // 3. Full YCF generation (requires building YCF tool from C sources)
+    const create_preload = b.addSystemCommand(&.{
+        "sh",
+        "-c",
+        b.fmt("cat > {s} << 'PRELOADEOF'\n{s}\nPRELOADEOF", .{ preload_out, preload_content }),
+    });
+    create_preload.step.dependOn(&mkdir_cmd.step);
+    gen_step.dependOn(&create_preload.step);
 
     return gen_step;
 }
@@ -842,7 +794,6 @@ fn buildERTS(
         b.fmt("{s}/erl_dirty_bif_wrap.c", .{gen_dir}),
         b.fmt("{s}/driver_tab.c", .{gen_dir}),
         b.fmt("{s}/preload.c", .{gen_dir}),
-        b.fmt("{s}/utils_ycf_stubs.c", .{gen_dir}),
     };
 
     beam.addCSourceFiles(.{
@@ -1274,4 +1225,53 @@ fn buildAsmjit(
     });
 
     return asmjit;
+}
+
+// ============================================================================
+// Build YCF (Yielding C Functions) tool
+// ============================================================================
+
+fn buildYcf(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) *std.Build.Step.Compile {
+    const ycf_module = b.createModule(.{
+        .root_source_file = null,
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+
+    const ycf = b.addExecutable(.{
+        .name = "yielding_c_fun",
+        .root_module = ycf_module,
+    });
+
+    const ycf_path = "otp_src_28.1/erts/lib_src/yielding_c_fun";
+
+    ycf.addIncludePath(b.path(ycf_path));
+
+    const ycf_flags = [_][]const u8{
+        "-std=c99",
+    };
+
+    const ycf_sources = [_][]const u8{
+        ycf_path ++ "/ycf_lexer.c",
+        ycf_path ++ "/ycf_main.c",
+        ycf_path ++ "/ycf_node.c",
+        ycf_path ++ "/ycf_parser.c",
+        ycf_path ++ "/ycf_printers.c",
+        ycf_path ++ "/ycf_string.c",
+        ycf_path ++ "/ycf_symbol.c",
+        ycf_path ++ "/ycf_utils.c",
+        ycf_path ++ "/ycf_yield_fun.c",
+    };
+
+    ycf.addCSourceFiles(.{
+        .files = &ycf_sources,
+        .flags = &ycf_flags,
+    });
+
+    return ycf;
 }
