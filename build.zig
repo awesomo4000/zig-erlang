@@ -335,6 +335,7 @@ fn buildERTS(
         // Windows-specific flags
         // Note: zig automatically defines _WIN32_WINNT, so we don't redefine it
         // STATIC_ERLANG_DRIVER prevents macro conflicts in erl_win_dyn_driver.h
+        // -fms-extensions enables __try/__except SEH support
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
@@ -345,6 +346,7 @@ fn buildERTS(
             "-DSTATIC_ERLANG_DRIVER",
             "-DSTATIC_ERLANG_NIF",
             "-std=c11",
+            "-fms-extensions",
             "-fno-common",
             "-fno-strict-aliasing",
         }
@@ -377,7 +379,7 @@ fn buildERTS(
         };
 
     // For JIT builds, add BEAMASM to all C files
-    const max_base_flags = 11; // Max length of base_flags (Linux with _GNU_SOURCE and zig_compat.h)
+    const max_base_flags = 12; // Max length of base_flags (Windows with all defines)
     var common_flags_buf: [max_base_flags + 1][]const u8 = undefined;
     const common_flags = if (options.enable_jit) blk: {
         @memcpy(common_flags_buf[0..base_flags.len], base_flags);
