@@ -12,8 +12,9 @@ tar -xzf sources/ncurses-6.5.tar.gz -C sources/
 # Build
 zig build
 
-# Output
-zig-out/bin/beam.smp
+# Output (organized by platform)
+zig-out/aarch64-macos/bin/beam.smp
+zig-out/aarch64-macos/lib/libtinfo.a
 ```
 
 ## Documentation
@@ -57,6 +58,25 @@ zig build -Dtarget=aarch64-macos  # or just: zig build
 - ✅ **x86_64-macos** - Intel macOS
 - ✅ **aarch64-linux-gnu** - ARM64 Linux (glibc)
 - ✅ **x86_64-linux-gnu** - x86_64 Linux (glibc)
+
+**Output Structure:**
+
+Each target gets its own directory with bin/ and lib/ subdirectories:
+```
+zig-out/
+├── aarch64-macos/
+│   ├── bin/beam.smp
+│   └── lib/libtinfo.a
+├── x86_64-macos/
+│   ├── bin/beam.smp
+│   └── lib/libtinfo.a
+├── aarch64-linux/
+│   ├── bin/beam.smp
+│   └── lib/libtinfo.a
+└── x86_64-linux/
+    ├── bin/beam.smp
+    └── lib/libtinfo.a
+```
 
 **Key Features:**
 - Architecture-aware JIT backend selection (ARM64/x86_64)

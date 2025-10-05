@@ -135,7 +135,7 @@ Each target gets its own:
 Use `scripts/compile-all-targets.sh` to build all 4 targets:
 ```bash
 ./scripts/compile-all-targets.sh
-# Creates: zig-out/beam.smp-{target} for each target
+# Creates platform-specific directories with bin/ and lib/ subdirectories
 ```
 
 ## Vendor Libraries
@@ -168,12 +168,23 @@ Our generated files live in `generated/{target}/{opt_mode}/jit/` - completely se
 
 ## Build Output
 
-Per-target executables in `zig-out/`:
-- `beam.smp` (default target)
-- `beam.smp-aarch64-macos` (56MB ARM64 Mach-O)
-- `beam.smp-x86_64-macos` (49MB x86_64 Mach-O)
-- `beam.smp-aarch64-linux-gnu` (78MB ARM64 ELF)
-- `beam.smp-x86_64-linux-gnu` (70MB x86_64 ELF)
+Platform-specific output directories in `zig-out/`:
+
+```
+zig-out/
+├── aarch64-macos/
+│   ├── bin/beam.smp          (56MB ARM64 Mach-O)
+│   └── lib/libtinfo.a        (1.1MB static lib)
+├── x86_64-macos/
+│   ├── bin/beam.smp          (49MB x86_64 Mach-O)
+│   └── lib/libtinfo.a        (1.0MB static lib)
+├── aarch64-linux/
+│   ├── bin/beam.smp          (78MB ARM64 ELF)
+│   └── lib/libtinfo.a        (1.2MB static lib)
+└── x86_64-linux/
+    ├── bin/beam.smp          (70MB x86_64 ELF)
+    └── lib/libtinfo.a        (1.1MB static lib)
+```
 
 All builds are JIT-enabled with architecture-specific BEAMASM backends.
 
