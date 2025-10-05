@@ -115,12 +115,14 @@ The build system supports cross-compilation to multiple targets:
 
 ### Supported Targets
 
-| Target | Architecture | OS | JIT Backend | Status |
-|--------|-------------|-----|-------------|--------|
-| `aarch64-macos` | ARM64 | macOS | BEAMASM ARM64 | ✅ Working |
-| `x86_64-macos` | x86_64 | macOS | BEAMASM x86_64 | ✅ Working |
-| `aarch64-linux-gnu` | ARM64 | Linux (glibc) | BEAMASM ARM64 | ✅ Working |
-| `x86_64-linux-gnu` | x86_64 | Linux (glibc) | BEAMASM x86_64 | ✅ Working |
+| Target | Architecture | OS | Linking | JIT Backend | Status |
+|--------|-------------|-----|---------|-------------|--------|
+| `aarch64-macos` | ARM64 | macOS | Dynamic | BEAMASM ARM64 | ✅ Working |
+| `x86_64-macos` | x86_64 | macOS | Dynamic | BEAMASM x86_64 | ✅ Working |
+| `aarch64-linux-gnu` | ARM64 | Linux (glibc) | Dynamic | BEAMASM ARM64 | ✅ Working |
+| `x86_64-linux-gnu` | x86_64 | Linux (glibc) | Dynamic | BEAMASM x86_64 | ✅ Working |
+| `aarch64-linux-musl` | ARM64 | Linux (musl) | Fully Static | BEAMASM ARM64 | ✅ Working |
+| `x86_64-linux-musl` | x86_64 | Linux (musl) | Fully Static | BEAMASM x86_64 | ✅ Working |
 
 ### Per-Target Builds
 
@@ -132,7 +134,7 @@ Each target gets its own:
 
 ### Build Script
 
-Use `scripts/compile-all-targets.sh` to build all 4 targets:
+Use `scripts/compile-all-targets.sh` to build all 6 targets:
 ```bash
 ./scripts/compile-all-targets.sh
 # Creates platform-specific directories with bin/ and lib/ subdirectories
@@ -182,9 +184,10 @@ Avoids forking the multi-GB BEAM process directly. Instead, BEAM forks a small h
 - Links with ethread library for threading support
 - Includes platform-specific headers from `erts/{target}/` and `erts/include/{target}/`
 
-**Linux compatibility:**
-- `closefrom()` is BSD-only, not available in glibc
-- Provided in `build/linux_compat.c` with fallback implementation using `/dev/fd` or loop
+**Linux compatibility (build/linux_compat.c, build/zig_compat.h):**
+- `closefrom()` - BSD-only, not in glibc/musl. Provided via `/dev/fd` or loop fallback
+- `dlvsym()` - GNU extension for versioned symbols, not in musl. Macro fallback to `dlsym()`
+- `mallopt()` - GNU malloc tuning, not in musl. No-op inline stub (returns 0)
 
 ## Source Files Not Modified
 
@@ -222,21 +225,27 @@ All builds are JIT-enabled with architecture-specific BEAMASM backends.
 
 **Debug Builds** (default, with debug symbols):
 
-| Target | beam.smp | erl_child_setup | Total |
-|--------|----------|-----------------|-------|
-| aarch64-macos | 57MB | 555KB | 57.5MB |
-| x86_64-macos | 50MB | 522KB | 50.5MB |
-| aarch64-linux | 79MB | 2.5MB | 81.5MB |
-| x86_64-linux | 72MB | 2.4MB | 74.4MB |
+| Target | beam.smp | erl_child_setup | Total | Linking |
+|--------|----------|-----------------|-------|---------|
+| aarch64-macos | 57MB | 555KB | 57.5MB | Dynamic |
+| x86_64-macos | 50MB | 522KB | 50.5MB | Dynamic |
+| aarch64-linux-gnu | 79MB | 2.5MB | 81.5MB | Dynamic |
+| x86_64-linux-gnu | 72MB | 2.4MB | 74.4MB | Dynamic |
+| aarch64-linux-musl | 80MB | 2.9MB | 82.9MB | Fully Static |
+| x86_64-linux-musl | 80MB | 2.9MB | 82.9MB | Fully Static |
 
 **Release Builds** (`-Doptimize=ReleaseSmall`):
 
-| Target | beam.smp | erl_child_setup | Total |
-|--------|----------|-----------------|-------|
-| aarch64-macos | 4.2MB | ~50KB | 4.25MB |
-| x86_64-macos | 3.8MB | ~50KB | 3.85MB |
-| aarch64-linux | 3.7MB | ~200KB | 3.9MB |
-| x86_64-linux | 3.7MB | ~200KB | 3.9MB |
+| Target | beam.smp | erl_child_setup | Total | Linking |
+|--------|----------|-----------------|-------|---------|
+| aarch64-macos | 4.2MB | ~50KB | 4.25MB | Dynamic |
+| x86_64-macos | 3.8MB | ~50KB | 3.85MB | Dynamic |
+| aarch64-linux-gnu | 3.7MB | ~200KB | 3.9MB | Dynamic |
+| x86_64-linux-gnu | 3.7MB | ~200KB | 3.9MB | Dynamic |
+| aarch64-linux-musl | 3.8MB | 64KB | 3.86MB | Fully Static ⭐ |
+| x86_64-linux-musl | 3.8MB | 56KB | 3.86MB | Fully Static ⭐ |
+
+**Note:** Musl targets produce fully static binaries with zero dynamic dependencies, ideal for portable deployment.
 
 ## Future Improvements
 

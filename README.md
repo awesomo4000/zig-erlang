@@ -31,7 +31,7 @@ Builds a complete BEAM VM without using autoconf/make:
 - ✅ Vendored libraries (zlib, zstd, pcre, ryu)
 - ✅ Minimal termcap implementation (Zig, replaces ncurses)
 - ✅ Real YCF coroutine transformations (9,530 lines generated)
-- ✅ Cross-compilation support for 4 targets
+- ✅ Cross-compilation support for 6 targets
 - ⚠️ No preloaded modules (VM needs external setup)
 
 ## Architecture
@@ -47,6 +47,8 @@ Build for all supported targets:
 # Build for specific target
 zig build -Dtarget=x86_64-linux-gnu
 zig build -Dtarget=aarch64-linux-gnu
+zig build -Dtarget=x86_64-linux-musl
+zig build -Dtarget=aarch64-linux-musl
 zig build -Dtarget=x86_64-macos
 zig build -Dtarget=aarch64-macos  # or just: zig build
 
@@ -57,8 +59,10 @@ zig build -Dtarget=aarch64-macos  # or just: zig build
 **Supported Targets (All Working):**
 - ✅ **aarch64-macos** - ARM64 macOS (Apple Silicon)
 - ✅ **x86_64-macos** - Intel macOS
-- ✅ **aarch64-linux-gnu** - ARM64 Linux (glibc)
-- ✅ **x86_64-linux-gnu** - x86_64 Linux (glibc)
+- ✅ **aarch64-linux-gnu** - ARM64 Linux (glibc, dynamic)
+- ✅ **x86_64-linux-gnu** - x86_64 Linux (glibc, dynamic)
+- ✅ **aarch64-linux-musl** - ARM64 Linux (musl, fully static)
+- ✅ **x86_64-linux-musl** - x86_64 Linux (musl, fully static)
 
 **Output Structure:**
 
@@ -83,11 +87,13 @@ zig-out/
 
 Debug builds (default):
 - macOS: 49-56MB per platform
-- Linux: 70-78MB per platform
+- Linux (glibc): 70-78MB per platform
+- Linux (musl): 80MB per platform
 
 Release builds (`-Doptimize=ReleaseSmall`):
 - macOS: 3.8-4.2MB per platform
-- Linux: 3.7MB per platform
+- Linux (glibc): 3.7-3.8MB per platform
+- Linux (musl): 3.8MB per platform (fully static, zero dependencies)
 
 See [BUILD.md](BUILD.md) for detailed size breakdown.
 
@@ -96,6 +102,7 @@ See [BUILD.md](BUILD.md) for detailed size breakdown.
 - Minimal termcap implementation in Zig (~10KB, replaces ncurses)
 - Platform-specific configurations and flags
 - Static linking of all dependencies
+- Fully static musl binaries for portable Linux deployment
 
 **Important:** Source tarball must be extracted to `sources/` directory before building.
 
@@ -108,19 +115,20 @@ Modularized for AI context optimization:
 - `build/termcap_mini.zig` - Minimal termcap implementation
 - `build/linux_compat.c` - Linux compatibility (closefrom implementation)
 - `build/zig_compat.h` - Compatibility for musl vs glibc
-- `scripts/compile-all-targets.sh` - Build all 4 targets
+- `scripts/compile-all-targets.sh` - Build all 6 targets
 
 ## Status
 
 **Working:**
-- ✅ Cross-compilation to 4 targets (macOS ARM64/x86_64, Linux ARM64/x86_64)
+- ✅ Cross-compilation to 6 targets (macOS ARM64/x86_64, Linux glibc/musl ARM64/x86_64)
 - ✅ Architecture-specific JIT compilation (BEAMASM)
 - ✅ Process spawning helper (`erl_child_setup`) for all targets
 - ✅ All vendor libraries built per-target with zig cc
 - ✅ Minimal termcap in Zig (replaces ncurses, ~10KB vs ~1.5MB)
-- ✅ Linux compatibility layer (closefrom implementation)
+- ✅ Linux compatibility layer (closefrom, dlvsym, mallopt for musl)
 - ✅ Zero undefined symbols, all targets link successfully
 - ✅ YCF yielding transformations (real coroutine implementations)
+- ✅ Fully static musl binaries with zero dynamic dependencies
 
 **Not Yet Implemented:**
 - ⚠️ Runtime environment setup (BINDIR, preloaded modules)
