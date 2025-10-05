@@ -21,6 +21,13 @@ pub fn generateSources(
     // Output directory for generated files: generated/target/type/flavor
     const gen_dir = b.fmt("generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
 
+    // Determine JIT backend architecture
+    const jit_arch = switch (target.result.cpu.arch) {
+        .aarch64, .aarch64_be => "arm",
+        .x86_64, .x86 => "x86",
+        else => "arm", // Default to ARM for unsupported architectures
+    };
+
     // Create generation directory
     const mkdir_cmd = b.addSystemCommand(&.{ "mkdir", "-p", gen_dir });
     gen_step.dependOn(&mkdir_cmd.step);
@@ -64,7 +71,7 @@ pub fn generateSources(
 
         // Generate beam_asm_global.hpp for JIT
         const beam_asm_global_out = b.fmt("{s}/beam_asm_global.hpp", .{gen_dir});
-        const beam_asm_cmd = b.fmt("perl {s}/beam/jit/arm/beam_asm_global.hpp.pl > {s}", .{ emulator_path, beam_asm_global_out });
+        const beam_asm_cmd = b.fmt("perl {s}/beam/jit/{s}/beam_asm_global.hpp.pl > {s}", .{ emulator_path, jit_arch, beam_asm_global_out });
         const gen_beam_asm_global = b.addSystemCommand(&.{
             "sh",
             "-c",
@@ -94,9 +101,9 @@ pub fn generateSources(
         otp_root ++ "/lib/compiler/src/genop.tab",
         emulator_path ++ "/beam/predicates.tab",
         emulator_path ++ "/beam/generators.tab",
-        emulator_path ++ "/beam/jit/arm/ops.tab",
-        emulator_path ++ "/beam/jit/arm/predicates.tab",
-        emulator_path ++ "/beam/jit/arm/generators.tab",
+        b.fmt("{s}/beam/jit/{s}/ops.tab", .{ emulator_path, jit_arch }),
+        b.fmt("{s}/beam/jit/{s}/predicates.tab", .{ emulator_path, jit_arch }),
+        b.fmt("{s}/beam/jit/{s}/generators.tab", .{ emulator_path, jit_arch }),
     });
     gen_opcodes.step.dependOn(&mkdir_cmd.step);
     gen_step.dependOn(&gen_opcodes.step);

@@ -118,6 +118,13 @@ fn buildERTS(
     const build_type = "opt";
     const gen_dir = b.fmt("generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
 
+    // Determine JIT backend architecture
+    const jit_arch = switch (target.result.cpu.arch) {
+        .aarch64, .aarch64_be => "arm",
+        .x86_64, .x86 => "x86",
+        else => "arm", // Default to ARM for unsupported architectures
+    };
+
     // Create module for C-only code (no root Zig source file)
     const beam_module = b.createModule(.{
         .root_source_file = null,
@@ -160,7 +167,7 @@ fn buildERTS(
     // JIT include paths
     if (options.enable_jit) {
         beam.addIncludePath(b.path(emulator_path ++ "/beam/jit"));
-        beam.addIncludePath(b.path(emulator_path ++ "/beam/jit/arm"));
+        beam.addIncludePath(b.path(b.fmt("{s}/beam/jit/{s}", .{ emulator_path, jit_arch })));
     }
 
     // Add generated file directory to include path
@@ -496,29 +503,35 @@ fn buildERTS(
             .flags = common_flags,
         });
 
-        // JIT-specific C++ sources (common + ARM64)
-        const jit_cpp_sources = [_][]const u8{
-            // Common JIT C++ files
-            emulator_path ++ "/beam/jit/beam_jit_common.cpp",
-            emulator_path ++ "/beam/jit/beam_jit_main.cpp",
-            emulator_path ++ "/beam/jit/beam_jit_metadata.cpp",
-            // ARM64-specific
-            emulator_path ++ "/beam/jit/arm/beam_asm_global.cpp",
-            emulator_path ++ "/beam/jit/arm/beam_asm_module.cpp",
-            emulator_path ++ "/beam/jit/arm/process_main.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_arith.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_bs.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_bif.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_call.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_common.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_float.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_fun.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_guard_bifs.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_map.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_msg.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_select.cpp",
-            emulator_path ++ "/beam/jit/arm/instr_trace.cpp",
+        // JIT-specific C++ sources (common + architecture-specific)
+        // Architecture-specific instruction files
+        const jit_arch_sources = [_][]const u8{
+            "beam_asm_global.cpp",
+            "beam_asm_module.cpp",
+            "process_main.cpp",
+            "instr_arith.cpp",
+            "instr_bs.cpp",
+            "instr_bif.cpp",
+            "instr_call.cpp",
+            "instr_common.cpp",
+            "instr_float.cpp",
+            "instr_fun.cpp",
+            "instr_guard_bifs.cpp",
+            "instr_map.cpp",
+            "instr_msg.cpp",
+            "instr_select.cpp",
+            "instr_trace.cpp",
         };
+
+        // Build full paths for architecture-specific sources
+        var jit_cpp_sources_buf: [3 + jit_arch_sources.len][]const u8 = undefined;
+        jit_cpp_sources_buf[0] = emulator_path ++ "/beam/jit/beam_jit_common.cpp";
+        jit_cpp_sources_buf[1] = emulator_path ++ "/beam/jit/beam_jit_main.cpp";
+        jit_cpp_sources_buf[2] = emulator_path ++ "/beam/jit/beam_jit_metadata.cpp";
+        for (jit_arch_sources, 0..) |src, i| {
+            jit_cpp_sources_buf[3 + i] = b.fmt("{s}/beam/jit/{s}/{s}", .{ emulator_path, jit_arch, src });
+        }
+        const jit_cpp_sources = jit_cpp_sources_buf[0..];
 
         const cpp_flags = if (target.result.os.tag == .linux)
             &[_][]const u8{
@@ -545,7 +558,7 @@ fn buildERTS(
             };
 
         beam.addCSourceFiles(.{
-            .files = &jit_cpp_sources,
+            .files = jit_cpp_sources,
             .flags = cpp_flags,
         });
 
