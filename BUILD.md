@@ -128,7 +128,7 @@ Each target gets its own:
 - **Generated files** in `generated/{target}/{opt_mode}/jit/`
 - **JIT backend** (ARM64 or x86_64 BEAMASM)
 - **Vendor libraries** (zlib, zstd, pcre, ryu, asmjit) built with `zig cc -target {target}`
-- **ncurses** (libtinfo.a) cross-compiled with platform-specific flags
+- **Minimal termcap** implementation in Zig
 
 ### Build Script
 
@@ -251,4 +251,4 @@ To make the VM fully functional, we would need to:
 - Generation Scripts: `sources/otp-28.1/erts/emulator/utils/`
 - Original Makefile: `sources/otp-28.1/erts/emulator/Makefile.in`
 - Generated Files: `generated/{target}/{opt_mode}/jit/`
-- Build System: `build.zig`, `build/codegen.zig`, `build/vendor_libs.zig`, `build/ncurses_lib.zig`
+- Build System: `build.zig`, `build/codegen.zig`, `build/vendor_libs.zig`, `build/termcap.zig`

@@ -37,7 +37,7 @@ Builds a complete BEAM VM without using autoconf/make:
 ## Architecture
 
 - **Build Tool:** Zig 0.15.1
-- **Source:** Erlang/OTP 28.1 + ncurses 6.5 (unmodified)
+- **Source:** Erlang/OTP 28.1 (unmodified)
 - **Output:** Static executable with JIT support
 
 ### Cross-Compilation Support
@@ -93,11 +93,11 @@ See [BUILD.md](BUILD.md) for detailed size breakdown.
 
 **Key Features:**
 - Architecture-aware JIT backend selection (ARM64/x86_64)
-- Vendored ncurses (libtinfo.a) built with zig cc for each target
+- Minimal termcap implementation in Zig (~10KB, replaces ncurses)
 - Platform-specific configurations and flags
 - Static linking of all dependencies
 
-**Important:** Source tarballs must be extracted to `sources/` directory before building.
+**Important:** Source tarball must be extracted to `sources/` directory before building.
 
 ### Build System Structure
 
@@ -105,7 +105,8 @@ Modularized for AI context optimization:
 - `build.zig` - Main build logic, ERTS compilation, cross-compilation
 - `build/codegen.zig` - Code generation (Perl scripts, YCF transformations)
 - `build/vendor_libs.zig` - Vendor libraries (zlib, zstd, pcre, ryu, asmjit)
-- `build/ncurses_lib.zig` - ncurses/terminfo build with zig cc
+- `build/termcap/termcap.zig` - Minimal termcap implementation
+- `build/linux_compat.c` - Linux compatibility (closefrom implementation)
 - `build/zig_compat.h` - Compatibility for musl vs glibc
 - `scripts/compile-all-targets.sh` - Build all 4 targets
 
