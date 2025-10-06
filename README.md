@@ -82,9 +82,13 @@ zig-out/
 ├── aarch64-linux/
 │   ├── bin/beam.smp
 │   └── lib/libtinfo.a
-└── x86_64-linux/
-    ├── bin/beam.smp
-    └── lib/libtinfo.a
+├── x86_64-linux/
+│   ├── bin/beam.smp
+│   └── lib/libtinfo.a
+├── aarch64-windows/
+│   └── bin/beam.smp.exe
+└── x86_64-windows/
+    └── bin/beam.smp.exe
 ```
 
 **Binary Sizes:**
@@ -93,11 +97,13 @@ Debug builds (default):
 - macOS: 49-56MB per platform
 - Linux (glibc): 70-78MB per platform
 - Linux (musl): 80MB per platform
+- Windows: 5.8-49MB per platform
 
 Release builds (`-Doptimize=ReleaseSmall`):
 - macOS: 3.8-4.2MB per platform
 - Linux (glibc): 3.7-3.8MB per platform
 - Linux (musl): 3.8MB per platform (fully static, zero dependencies)
+- Windows: TBD
 
 See [BUILD.md](BUILD.md) for detailed size breakdown.
 
