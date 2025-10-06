@@ -3,5 +3,5 @@ otp_src_28.1/
 .zig-cache/
 zig-out/
 ideas/
-generated/
+build/generated/
 sources/

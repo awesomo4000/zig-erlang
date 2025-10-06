@@ -1,7 +1,7 @@
 const std = @import("std");
 const codegen = @import("build/codegen.zig");
 const vendor_libs = @import("build/vendor_libs.zig");
-const preload = @import("build/preload.zig");
+const build_config = @import("build/build_config.zig");
 
 // Source directory paths
 const otp_root = "build/sources/otp-28.1";
@@ -43,9 +43,6 @@ pub fn build(b: *std.Build) void {
     // Build minimal termcap library in Zig
     const termcap_lib = vendor_libs.buildTermcap(b, target, optimize);
 
-    // Build preloaded modules in Zig
-    const preload_obj = preload.buildPreload(b, target, optimize);
-
     const asmjit = if (enable_jit) vendor_libs.buildAsmjit(b, target, optimize) else null;
 
     // ============================================================================
@@ -59,7 +56,6 @@ pub fn build(b: *std.Build) void {
         .pcre = pcre,
         .ethread = ethread,
         .termcap = termcap_lib,
-        .preload = preload_obj,
         .asmjit = asmjit,
         .static_link = static_link,
         .enable_jit = enable_jit,
@@ -98,6 +94,21 @@ pub fn build(b: *std.Build) void {
         }).step);
     }
 
+    // Install boot files needed by BEAM VM
+    const install_boot = b.addInstallDirectory(.{
+        .source_dir = b.path(otp_root ++ "/bootstrap/bin"),
+        .install_dir = .{ .custom = target_str },
+        .install_subdir = "bin",
+        .include_extensions = &.{".boot"},
+    });
+    install_step.dependOn(&install_boot.step);
+
+    // Install Erlang library applications
+    // Edit build/build_config.zig to change which apps are installed
+    for (build_config.default_apps) |app_name| {
+        installErlangApp(b, install_step, target_str, app_name);
+    }
+
     // ============================================================================
     // Tests
     // ============================================================================
@@ -117,7 +128,6 @@ const ERTSOptions = struct {
     pcre: *std.Build.Step.Compile,
     ethread: *std.Build.Step.Compile,
     termcap: *std.Build.Step.Compile,
-    preload: *std.Build.Step.Compile,
     asmjit: ?*std.Build.Step.Compile,
     static_link: bool,
     enable_jit: bool,
@@ -246,7 +256,7 @@ fn buildERTS(
     });
     const flavor = if (options.enable_jit) "jit" else "emu";
     const build_type = "opt";
-    const gen_dir = b.fmt("generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
+    const gen_dir = b.fmt("build/generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
 
     // Determine JIT backend architecture
     const jit_arch = switch (target.result.cpu.arch) {
@@ -347,6 +357,8 @@ fn buildERTS(
         // Note: zig automatically defines _WIN32_WINNT, so we don't redefine it
         // STATIC_ERLANG_DRIVER prevents macro conflicts in erl_win_dyn_driver.h
         // -fms-extensions enables __try/__except SEH support
+        // -fwrapv makes signed integer overflow well-defined (wraps using two's complement)
+        // -fno-sanitize=undefined disables UBSan (OTP has some undefined behavior that's intentional)
         // Permissive flags needed for OTP's Windows C code (works with MSVC)
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
@@ -361,6 +373,8 @@ fn buildERTS(
             "-fms-extensions",
             "-fno-common",
             "-fno-strict-aliasing",
+            "-fwrapv",
+            "-fno-sanitize=undefined",
             "-Wno-visibility",
             "-Wno-incompatible-pointer-types",
             "-Wno-int-conversion",
@@ -378,6 +392,8 @@ fn buildERTS(
     else if (target.result.os.tag == .linux)
         // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
         // Include zig_compat.h to provide missing function declarations for musl libc
+        // -fwrapv makes signed integer overflow well-defined (wraps using two's complement)
+        // -fno-sanitize=undefined disables UBSan (OTP has some undefined behavior that's intentional)
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
@@ -389,9 +405,13 @@ fn buildERTS(
             "-std=c11",
             "-fno-common",
             "-fno-strict-aliasing",
+            "-fwrapv",
+            "-fno-sanitize=undefined",
         }
     else
         // macOS and other Unix-like systems
+        // -fwrapv makes signed integer overflow well-defined (wraps using two's complement)
+        // -fno-sanitize=undefined disables UBSan (OTP has some undefined behavior that's intentional)
         &[_][]const u8{
             "-DHAVE_CONFIG_H",
             "-D_THREAD_SAFE",
@@ -401,6 +421,8 @@ fn buildERTS(
             "-std=c11",
             "-fno-common",
             "-fno-strict-aliasing",
+            "-fwrapv",
+            "-fno-sanitize=undefined",
         };
 
     // For JIT builds, add BEAMASM to all C files
@@ -843,7 +865,7 @@ fn buildERTS(
         b.fmt("{s}/erl_guard_bifs.c", .{gen_dir}),
         b.fmt("{s}/erl_dirty_bif_wrap.c", .{gen_dir}),
         b.fmt("{s}/driver_tab.c", .{gen_dir}),
-        // preload.c removed - now using Zig @embedFile in build/preload.zig
+        b.fmt("{s}/preload.c", .{gen_dir}),
     };
 
     beam.addCSourceFiles(.{
@@ -864,9 +886,6 @@ fn buildERTS(
     // Link minimal termcap library (provides termcap functions)
     beam.addObject(options.termcap);
 
-    // Link preloaded modules (provides pre_loaded array)
-    beam.addObject(options.preload);
-
     // Platform-specific system libraries
     if (target.result.os.tag == .macos) {
         // On macOS host, we can link system libraries even when cross-compiling to different arch
@@ -879,7 +898,7 @@ fn buildERTS(
             const sdk_framework_path = b.fmt("{s}/System/Library/Frameworks", .{sdk_path});
             beam.addLibraryPath(.{ .cwd_relative = sdk_lib_path });
             beam.addFrameworkPath(.{ .cwd_relative = sdk_framework_path });
-            beam.linkFramework("CoreFoundation");
+            // CoreFoundation not needed - ERTS uses standard POSIX APIs from libSystem
         }
         beam.linkSystemLibrary("pthread");
         beam.linkSystemLibrary("m");
@@ -948,4 +967,43 @@ fn buildYcf(
     });
 
     return ycf;
+}
+
+// Install a single Erlang application, excluding unnecessary directories
+fn installErlangApp(
+    b: *std.Build,
+    install_step: *std.Build.Step,
+    target_str: []const u8,
+    app_name: []const u8,
+) void {
+    const app_path = b.fmt("{s}/lib/{s}", .{ otp_root, app_name });
+
+    // Only install runtime-needed subdirectories: ebin (always), include, priv (if they exist)
+    // ebin/ - compiled .beam files (required)
+    // include/ - header files for compilation (optional)
+    // priv/ - private resources like NIFs, executables (optional)
+    const needed_subdirs = [_][]const u8{ "ebin", "include", "priv" };
+
+    for (needed_subdirs) |subdir| {
+        const subdir_path = b.fmt("{s}/{s}", .{ app_path, subdir });
+
+        // Check if directory exists before trying to install
+        std.fs.cwd().access(subdir_path, .{}) catch |err| {
+            if (err == error.FileNotFound) {
+                // Directory doesn't exist, skip it
+                continue;
+            }
+            // Other errors, let the install step handle them
+        };
+
+        const install_subdir = b.fmt("lib/{s}/{s}", .{ app_name, subdir });
+
+        const install = b.addInstallDirectory(.{
+            .source_dir = b.path(subdir_path),
+            .install_dir = .{ .custom = target_str },
+            .install_subdir = install_subdir,
+        });
+
+        install_step.dependOn(&install.step);
+    }
 }

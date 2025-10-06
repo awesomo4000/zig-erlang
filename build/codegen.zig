@@ -21,8 +21,8 @@ pub fn generateSources(
     const flavor = if (enable_jit) "jit" else "emu";
     const build_type = "opt";
 
-    // Output directory for generated files: generated/target/type/flavor
-    const gen_dir = b.fmt("generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
+    // Output directory for generated files: build/generated/target/type/flavor
+    const gen_dir = b.fmt("build/generated/{s}/{s}/{s}", .{ target_str, build_type, flavor });
 
     // Determine JIT backend architecture
     const jit_arch = switch (target.result.cpu.arch) {
@@ -279,34 +279,17 @@ pub fn generateSources(
     gen_db_insert_ycf.step.dependOn(&mkdir_cmd.step);
     gen_step.dependOn(&gen_db_insert_ycf.step);
 
-    // Generate preload.c - minimal stub with no preloaded modules
+    // Generate preload.c using make_preload script
     const preload_out = b.fmt("{s}/preload.c", .{gen_dir});
-    const preload_content =
-        \\/*
-        \\ * Minimal preload stub - no modules preloaded for minimal build
-        \\ * Generated for zig-erlang minimal build
-        \\ */
-        \\
-        \\#ifdef HAVE_CONFIG_H
-        \\#  include "config.h"
-        \\#endif
-        \\
-        \\#include "sys.h"
-        \\
-        \\/* Preload structure */
-        \\const struct {
-        \\   char* name;
-        \\   int size;
-        \\   const unsigned char* code;
-        \\} pre_loaded[] = {
-        \\  {0, 0, 0}  /* terminator */
-        \\};
-        \\
-    ;
+    const preload_cmd = b.fmt(
+        "cd {s} && perl {s}/erts/emulator/utils/make_preload -old {s}/erts/preloaded/ebin/*.beam > {s}",
+        .{ b.graph.env_map.get("PWD") orelse ".", otp_root, otp_root, preload_out },
+    );
+
     const create_preload = b.addSystemCommand(&.{
         "sh",
         "-c",
-        b.fmt("cat > {s} << 'PRELOADEOF'\n{s}\nPRELOADEOF", .{ preload_out, preload_content }),
+        preload_cmd,
     });
     create_preload.step.dependOn(&mkdir_cmd.step);
     gen_step.dependOn(&create_preload.step);
