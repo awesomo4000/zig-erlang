@@ -31,8 +31,9 @@ Builds a complete BEAM VM without using autoconf/make:
 - ✅ Vendored libraries (zlib, zstd, pcre, ryu)
 - ✅ Minimal termcap implementation (Zig, replaces ncurses)
 - ✅ Real YCF coroutine transformations (9,530 lines generated)
-- ✅ Cross-compilation support for 6 targets
-- ⚠️ No preloaded modules (VM needs external setup)
+- ✅ Cross-compilation support for 8 targets
+- ✅ Preloaded modules (22 core .beam files embedded)
+- ✅ Configurable Erlang app installation (minimal to full OTP)
 
 ## Architecture
 
@@ -70,40 +71,44 @@ zig build -Dtarget=aarch64-windows-gnu
 
 **Output Structure:**
 
-Each target gets its own directory with bin/ and lib/ subdirectories:
+Each target gets its own directory with complete Erlang/OTP installation:
 ```
 zig-out/
 ├── aarch64-macos/
-│   ├── bin/beam.smp
-│   └── lib/libtinfo.a
-├── x86_64-macos/
-│   ├── bin/beam.smp
-│   └── lib/libtinfo.a
-├── aarch64-linux/
-│   ├── bin/beam.smp
-│   └── lib/libtinfo.a
-├── x86_64-linux/
-│   ├── bin/beam.smp
-│   └── lib/libtinfo.a
+│   ├── bin/
+│   │   ├── beam.smp              # BEAM VM (4.3MB with JIT)
+│   │   ├── erl_child_setup       # Process spawning helper
+│   │   ├── start.boot            # Boot scripts
+│   │   ├── start_clean.boot
+│   │   └── no_dot_erlang.boot
+│   └── lib/
+│       ├── kernel/ebin/          # Core OS interface
+│       └── stdlib/ebin/          # Standard library
+├── x86_64-macos/   [same structure]
+├── aarch64-linux/  [same structure]
+├── x86_64-linux/   [same structure]
 ├── aarch64-windows/
-│   └── bin/beam.smp.exe
-└── x86_64-windows/
-    └── bin/beam.smp.exe
+│   ├── bin/beam.smp.exe
+│   └── lib/ [same as above]
+└── x86_64-windows/ [same structure]
 ```
 
 **Binary Sizes:**
 
-Debug builds (default):
-- macOS: 49-56MB per platform
-- Linux (glibc): 70-78MB per platform
-- Linux (musl): 80MB per platform
-- Windows: 5.8-49MB per platform
-
-Release builds (`-Doptimize=ReleaseSmall`):
-- macOS: 3.8-4.2MB per platform
-- Linux (glibc): 3.7-3.8MB per platform
-- Linux (musl): 3.8MB per platform (fully static, zero dependencies)
+Release builds (`-Doptimize=ReleaseSmall`, minimal apps - kernel + stdlib):
+- **Total installation:** ~14MB (4.3MB VM + 9.6MB libs)
+- macOS: 4.3MB beam.smp
+- Linux (glibc): 3.7-3.8MB beam.smp
+- Linux (musl): 3.8MB beam.smp (fully static, zero dependencies)
 - Windows: TBD
+
+Debug builds (default):
+- macOS: 49-56MB beam.smp
+- Linux (glibc): 70-78MB beam.smp
+- Linux (musl): 80MB beam.smp
+- Windows: 5.8-49MB beam.smp
+
+**Note:** Excluding test, doc, and src directories saves ~53MB. Full OTP installation adds ~50MB+ of additional applications.
 
 See [BUILD.md](BUILD.md) for detailed size breakdown.
 
@@ -120,6 +125,7 @@ See [BUILD.md](BUILD.md) for detailed size breakdown.
 
 Modularized for AI context optimization:
 - `build.zig` - Main build logic, ERTS compilation, cross-compilation
+- `build/build_config.zig` - Configuration for which Erlang apps to install (minimal/standard/full)
 - `build/codegen.zig` - Code generation (Perl scripts, YCF transformations)
 - `build/vendor_libs.zig` - Vendor libraries (zlib, zstd, pcre, ryu, asmjit)
 - `build/termcap_mini.zig` - Minimal termcap implementation
@@ -139,9 +145,8 @@ Modularized for AI context optimization:
 - ✅ Zero undefined symbols, all targets link successfully
 - ✅ YCF yielding transformations (real coroutine implementations)
 - ✅ Fully static musl binaries with zero dynamic dependencies
-
-**Not Yet Implemented:**
-- ⚠️ Runtime environment setup (BINDIR, preloaded modules)
-- ⚠️ Full Erlang distribution (just VM binary for now)
+- ✅ Runtime environment setup (BINDIR, preloaded modules)
+- ✅ Minimal Erlang distribution (kernel + stdlib, configurable via build_config.zig)
+- ✅ Works in all build modes (Debug, ReleaseFast, ReleaseSafe, ReleaseSmall)
 
 See [BUILD.md](BUILD.md) for details on the build process.
