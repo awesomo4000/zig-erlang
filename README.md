@@ -51,18 +51,22 @@ zig build -Dtarget=x86_64-linux-musl
 zig build -Dtarget=aarch64-linux-musl
 zig build -Dtarget=x86_64-macos
 zig build -Dtarget=aarch64-macos  # or just: zig build
+zig build -Dtarget=x86_64-windows-gnu
+zig build -Dtarget=aarch64-windows-gnu
 
 # Build all targets at once
 ./scripts/compile-all-targets.sh
 ```
 
-**Supported Targets (All Working):**
+**Supported Targets:**
 - ✅ **aarch64-macos** - ARM64 macOS (Apple Silicon)
 - ✅ **x86_64-macos** - Intel macOS
 - ✅ **aarch64-linux-gnu** - ARM64 Linux (glibc, dynamic)
 - ✅ **x86_64-linux-gnu** - x86_64 Linux (glibc, dynamic)
 - ✅ **aarch64-linux-musl** - ARM64 Linux (musl, fully static)
 - ✅ **x86_64-linux-musl** - x86_64 Linux (musl, fully static)
+- ✅ **aarch64-windows-gnu** - ARM64 Windows (builds)
+- ✅ **x86_64-windows-gnu** - x86_64 Windows (builds)
 
 **Output Structure:**
 
@@ -115,12 +119,12 @@ Modularized for AI context optimization:
 - `build/termcap_mini.zig` - Minimal termcap implementation
 - `build/linux_compat.c` - Linux compatibility (closefrom implementation)
 - `build/zig_compat.h` - Compatibility for musl vs glibc
-- `scripts/compile-all-targets.sh` - Build all 6 targets
+- `scripts/compile-all-targets.sh` - Build all 8 targets
 
 ## Status
 
 **Working:**
-- ✅ Cross-compilation to 6 targets (macOS ARM64/x86_64, Linux glibc/musl ARM64/x86_64)
+- ✅ Cross-compilation to 8 targets (macOS, Linux, Windows - ARM64/x86_64)
 - ✅ Architecture-specific JIT compilation (BEAMASM)
 - ✅ Process spawning helper (`erl_child_setup`) for all targets
 - ✅ All vendor libraries built per-target with zig cc

@@ -31,6 +31,8 @@ TARGETS=(
     "x86_64-linux-gnu"
     "aarch64-linux-musl"
     "x86_64-linux-musl"
+    "aarch64-windows-gnu"
+    "x86_64-windows-gnu"
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

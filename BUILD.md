@@ -123,6 +123,8 @@ The build system supports cross-compilation to multiple targets:
 | `x86_64-linux-gnu` | x86_64 | Linux (glibc) | Dynamic | BEAMASM x86_64 | ✅ Working |
 | `aarch64-linux-musl` | ARM64 | Linux (musl) | Fully Static | BEAMASM ARM64 | ✅ Working |
 | `x86_64-linux-musl` | x86_64 | Linux (musl) | Fully Static | BEAMASM x86_64 | ✅ Working |
+| `aarch64-windows-gnu` | ARM64 | Windows | Dynamic | BEAMASM ARM64 | ✅ Builds |
+| `x86_64-windows-gnu` | x86_64 | Windows | Dynamic | BEAMASM x86_64 | ✅ Builds |
 
 ### Per-Target Builds
 
@@ -134,7 +136,7 @@ Each target gets its own:
 
 ### Build Script
 
-Use `scripts/compile-all-targets.sh` to build all 6 targets:
+Use `scripts/compile-all-targets.sh` to build all 8 targets:
 ```bash
 ./scripts/compile-all-targets.sh
 # Creates platform-specific directories with bin/ and lib/ subdirectories
@@ -233,6 +235,8 @@ All builds are JIT-enabled with architecture-specific BEAMASM backends.
 | x86_64-linux-gnu | 72MB | 2.4MB | 74.4MB | Dynamic |
 | aarch64-linux-musl | 80MB | 2.9MB | 82.9MB | Fully Static |
 | x86_64-linux-musl | 80MB | 2.9MB | 82.9MB | Fully Static |
+| aarch64-windows-gnu | 49MB | N/A | 49MB | Dynamic |
+| x86_64-windows-gnu | 5.8MB | N/A | 5.8MB | Dynamic |
 
 **Release Builds** (`-Doptimize=ReleaseSmall`):
 
