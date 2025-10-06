@@ -52,8 +52,10 @@ UWord sys_large_page_size;
 
 /*
  * Microsoft-specific function to map a WIN32 error code to a Posix errno.
+ * Windows cross-compilation: GNU toolchain doesn't use leading underscore.
  */
-extern void _dosmaperr(DWORD);
+extern void dosmaperr(DWORD);
+#define _dosmaperr dosmaperr
 
 #ifdef ERL_RUN_SHARED_LIB
 #ifdef __argc

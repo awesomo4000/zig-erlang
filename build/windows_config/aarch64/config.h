@@ -754,10 +754,10 @@
 #define HAVE_IN6 1
 
 /* Define to 1 if you have the variable in6addr_any declared. */
-/* #undef HAVE_IN6ADDR_ANY */
+#define HAVE_IN6ADDR_ANY 1
 
 /* Define to 1 if you have the variable in6addr_loopback declared. */
-/* #undef HAVE_IN6ADDR_LOOPBACK */
+#define HAVE_IN6ADDR_LOOPBACK 1
 
 /* Define to 1 if you have the `inet_pton' function. */
 /* #undef HAVE_INET_PTON */

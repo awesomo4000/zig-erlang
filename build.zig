@@ -275,6 +275,11 @@ fn buildERTS(
     // Include paths
     // ========================================================================
 
+    // For Windows cross-compilation: Add patched headers FIRST to override originals
+    if (target.result.os.tag == .windows) {
+        beam.addIncludePath(b.path("build/windows_compat/beam"));
+    }
+
     beam.addIncludePath(b.path(erts_path ++ "/include"));
     beam.addIncludePath(b.path(erts_path ++ "/include/internal"));
     beam.addIncludePath(b.path(emulator_path));
@@ -624,9 +629,9 @@ fn buildERTS(
         "build/windows_compat/sys/win32/sys_float.c",
         emulator_path ++ "/sys/win32/sys_time.c",
         emulator_path ++ "/sys/win32/sys_interrupt.c",
-        emulator_path ++ "/sys/win32/erl_win32_sys_ddll.c",
+        "build/windows_compat/sys/win32/erl_win32_sys_ddll.c",
         emulator_path ++ "/sys/win32/erl_poll.c",
-        emulator_path ++ "/sys/win32/dosmap.c",
+        "build/windows_compat/sys/win32/dosmap.c",
         // Common sources
         emulator_path ++ "/sys/common/erl_check_io.c",
         emulator_path ++ "/sys/common/erl_mseg.c",
@@ -875,6 +880,14 @@ fn buildERTS(
         beam.linkSystemLibrary("rt");
         beam.linkSystemLibrary("util");
         beam.linkSystemLibrary("dl");
+    } else if (target.result.os.tag == .windows) {
+        // Windows system libraries
+        beam.linkSystemLibrary("ws2_32");   // Winsock 2 (socket functions)
+        beam.linkSystemLibrary("iphlpapi"); // IP Helper API (network adapter info)
+        beam.linkSystemLibrary("advapi32"); // Advanced Windows services
+        beam.linkSystemLibrary("kernel32"); // Core Windows API
+        beam.linkSystemLibrary("user32");   // User interface functions
+        beam.linkSystemLibrary("shell32");  // Shell API functions
     }
 
     return beam;
