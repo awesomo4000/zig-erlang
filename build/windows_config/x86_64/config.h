@@ -385,7 +385,7 @@
 /* #undef ETHR_PPC_HAVE_NO_LWSYNC */
 
 /* Define if you prefer gcc native ethread implementations */
-/* #undef ETHR_PREFER_GCC_NATIVE_IMPLS */
+#define ETHR_PREFER_GCC_NATIVE_IMPLS 1
 
 /* Define if you prefer libatomic_ops native ethread implementations */
 /* #undef ETHR_PREFER_LIBATOMIC_OPS_NATIVE_IMPLS */

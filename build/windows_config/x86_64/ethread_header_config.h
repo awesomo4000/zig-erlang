@@ -168,7 +168,7 @@
 #define ETHR_HAVE___atomic_compare_exchange_n 28
 
 /* Define if you prefer gcc native ethread implementations */
-/* #undef ETHR_PREFER_GCC_NATIVE_IMPLS */
+#define ETHR_PREFER_GCC_NATIVE_IMPLS 1
 
 /* Define if you have the <sched.h> header file. */
 #define ETHR_HAVE_SCHED_H 1
