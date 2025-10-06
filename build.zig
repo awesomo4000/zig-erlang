@@ -789,6 +789,7 @@ fn buildERTS(
                 "-DSTATIC_ERLANG_DRIVER",
                 "-DSTATIC_ERLANG_NIF",
                 "-DBEAMASM",
+                "-DASMJIT_STATIC=1",
                 "-std=c++17",
                 "-fno-common",
                 "-fms-extensions",
@@ -813,6 +814,7 @@ fn buildERTS(
                 "-DUSE_THREADS",
                 "-D_GNU_SOURCE",
                 "-DBEAMASM",
+                "-DASMJIT_STATIC=1",
                 "-std=c++17",
                 "-fno-common",
             }
@@ -824,6 +826,7 @@ fn buildERTS(
                 "-DPOSIX_THREADS",
                 "-DUSE_THREADS",
                 "-DBEAMASM",
+                "-DASMJIT_STATIC=1",
                 "-std=c++17",
                 "-fno-common",
             };
