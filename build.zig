@@ -574,6 +574,12 @@ fn buildERTS(
     // NIFs (Native Implemented Functions)
     // ========================================================================
 
+    // Windows cross-compilation: Use patched version of prim_socket_nif.c for Windows
+    const prim_socket_nif_src = if (target.result.os.tag == .windows)
+        "build/windows_compat/nifs/common/prim_socket_nif.c"
+    else
+        emulator_path ++ "/nifs/common/prim_socket_nif.c";
+
     const nif_sources = [_][]const u8{
         emulator_path ++ "/nifs/common/prim_tty_nif.c",
         emulator_path ++ "/nifs/common/erl_tracer_nif.c",
@@ -584,7 +590,7 @@ fn buildERTS(
         emulator_path ++ "/nifs/common/socket_dbg.c",
         emulator_path ++ "/nifs/common/socket_tarray.c",
         emulator_path ++ "/nifs/common/socket_util.c",
-        emulator_path ++ "/nifs/common/prim_socket_nif.c",
+        prim_socket_nif_src,
         emulator_path ++ "/nifs/common/prim_net_nif.c",
     };
 
@@ -611,10 +617,11 @@ fn buildERTS(
     // System sources (platform-specific)
     // ========================================================================
 
+    // Windows cross-compilation: Use patched versions for Windows
     const sys_sources = if (target.result.os.tag == .windows) [_][]const u8{
-        emulator_path ++ "/sys/win32/sys.c",
+        "build/windows_compat/sys/win32/sys.c",
         emulator_path ++ "/sys/win32/sys_env.c",
-        emulator_path ++ "/sys/win32/sys_float.c",
+        "build/windows_compat/sys/win32/sys_float.c",
         emulator_path ++ "/sys/win32/sys_time.c",
         emulator_path ++ "/sys/win32/sys_interrupt.c",
         emulator_path ++ "/sys/win32/erl_win32_sys_ddll.c",
@@ -629,7 +636,7 @@ fn buildERTS(
         emulator_path ++ "/sys/common/erl_os_monotonic_time_extender.c",
         // Windows NIFs
         emulator_path ++ "/nifs/win32/win_prim_file.c",
-        emulator_path ++ "/nifs/win32/win_socket_asyncio.c",
+        "build/windows_compat/nifs/win32/win_socket_asyncio.c",
     } else [_][]const u8{
         emulator_path ++ "/sys/unix/sys.c",
         emulator_path ++ "/sys/unix/sys_drivers.c",
