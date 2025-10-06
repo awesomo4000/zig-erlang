@@ -362,6 +362,7 @@ fn buildERTS(
             "-Wno-incompatible-pointer-types-discards-qualifiers",
             "-Wno-unused-value",
             "-Wno-return-type",
+            "-Wno-cast-qual",
         }
     else if (target.result.os.tag == .linux)
         // Linux requires _GNU_SOURCE for extensions like syscall(), memrchr()
