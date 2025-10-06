@@ -1,9 +1,10 @@
 const std = @import("std");
 const codegen = @import("build/codegen.zig");
 const vendor_libs = @import("build/vendor_libs.zig");
+const preload = @import("build/preload.zig");
 
 // Source directory paths
-const otp_root = "sources/otp-28.1";
+const otp_root = "build/sources/otp-28.1";
 
 pub fn build(b: *std.Build) void {
     // Target and optimization options
@@ -42,6 +43,9 @@ pub fn build(b: *std.Build) void {
     // Build minimal termcap library in Zig
     const termcap_lib = vendor_libs.buildTermcap(b, target, optimize);
 
+    // Build preloaded modules in Zig
+    const preload_obj = preload.buildPreload(b, target, optimize);
+
     const asmjit = if (enable_jit) vendor_libs.buildAsmjit(b, target, optimize) else null;
 
     // ============================================================================
@@ -55,6 +59,7 @@ pub fn build(b: *std.Build) void {
         .pcre = pcre,
         .ethread = ethread,
         .termcap = termcap_lib,
+        .preload = preload_obj,
         .asmjit = asmjit,
         .static_link = static_link,
         .enable_jit = enable_jit,
@@ -112,6 +117,7 @@ const ERTSOptions = struct {
     pcre: *std.Build.Step.Compile,
     ethread: *std.Build.Step.Compile,
     termcap: *std.Build.Step.Compile,
+    preload: *std.Build.Step.Compile,
     asmjit: ?*std.Build.Step.Compile,
     static_link: bool,
     enable_jit: bool,
@@ -837,7 +843,7 @@ fn buildERTS(
         b.fmt("{s}/erl_guard_bifs.c", .{gen_dir}),
         b.fmt("{s}/erl_dirty_bif_wrap.c", .{gen_dir}),
         b.fmt("{s}/driver_tab.c", .{gen_dir}),
-        b.fmt("{s}/preload.c", .{gen_dir}),
+        // preload.c removed - now using Zig @embedFile in build/preload.zig
     };
 
     beam.addCSourceFiles(.{
@@ -857,6 +863,9 @@ fn buildERTS(
 
     // Link minimal termcap library (provides termcap functions)
     beam.addObject(options.termcap);
+
+    // Link preloaded modules (provides pre_loaded array)
+    beam.addObject(options.preload);
 
     // Platform-specific system libraries
     if (target.result.os.tag == .macos) {

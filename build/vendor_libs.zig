@@ -2,7 +2,7 @@ const std = @import("std");
 const termcap = @import("termcap.zig");
 
 // Source directory paths
-const otp_root = "sources/otp-28.1";
+const otp_root = "build/sources/otp-28.1";
 
 // ============================================================================
 // Build vendored zlib

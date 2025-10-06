@@ -2,7 +2,7 @@ const std = @import("std");
 const vendor_libs = @import("vendor_libs.zig");
 
 // Source directory paths
-const otp_root = "sources/otp-28.1";
+const otp_root = "build/sources/otp-28.1";
 
 pub fn generateSources(
     b: *std.Build,
